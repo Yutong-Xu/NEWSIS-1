@@ -13,6 +13,23 @@ import { sisLogin } from "@/lib/sis-sso";
  * - unknown or sso account → real ADFS/PeopleSoft flow via lib/sis-sso;
  *   real school passwords are NEVER persisted
  */
+
+// brute-force protection: sliding-window rate limit, per credential and per IP.
+// in-memory is sufficient for the single-node deployment this demo targets.
+const attempts = new Map<string, { count: number; windowStart: number }>();
+const WINDOW_MS = 10 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+function rateLimited(key: string): boolean {
+  const now = Date.now();
+  const rec = attempts.get(key);
+  if (!rec || now - rec.windowStart > WINDOW_MS) {
+    attempts.set(key, { count: 1, windowStart: now });
+    return false;
+  }
+  rec.count += 1;
+  return rec.count > MAX_ATTEMPTS;
+}
+
 export async function POST(req: NextRequest) {
   let body: { studentNo?: string; password?: string };
   try {
@@ -25,6 +42,10 @@ export async function POST(req: NextRequest) {
   if (!studentNo || !password) {
     return err(400, "missing_fields", "请输入用户名或学号和密码 / Username or student ID and password are required");
   }
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
+  if (rateLimited(`acct:${studentNo}`) || rateLimited(`ip:${ip}`)) {
+    return err(429, "rate_limited", "尝试次数过多，请 10 分钟后再试 / Too many attempts, try again in 10 minutes");
+  }
 
   // demo accounts are looked up by username; real students by student number.
   // the lookup decides the path — the client cannot choose or bypass it.
@@ -33,7 +54,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (existing?.authSource === "demo" && existing.passwordHash) {
-    if (!bcrypt.compareSync(password, existing.passwordHash)) {
+    if (!(await bcrypt.compare(password, existing.passwordHash))) {
       return err(401, "invalid_credentials", "用户名或密码不正确 / Incorrect username or password");
     }
     return issueSession(existing.studentNo);

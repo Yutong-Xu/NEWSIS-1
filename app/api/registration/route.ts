@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
-import { getSessionUser, unauthorized } from "@/lib/db/auth";
+import { getSessionUser, unauthorized, checkOrigin } from "@/lib/db/auth";
 import { submitRegistration } from "@/lib/db/registration-service";
 
 function err(status: number, code: string, message: string) {
@@ -9,6 +9,7 @@ function err(status: number, code: string, message: string) {
 
 /** POST /api/registration { planId } — submit a plan for registration. */
 export async function POST(req: NextRequest) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   let body: { planId?: string };

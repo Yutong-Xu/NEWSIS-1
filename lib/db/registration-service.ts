@@ -29,9 +29,22 @@ export interface RegistrationOutcome {
   waitlistPosition?: number;
 }
 
+function sisNow(): Date {
+  // time override is a development affordance and must never exist in production
+  if (process.env.NODE_ENV !== "production" && process.env.SIS_TIME_OVERRIDE) {
+    return new Date(process.env.SIS_TIME_OVERRIDE);
+  }
+  return new Date();
+}
+
 function registrationWindowOpen(term: { regOpenAt: Date; regCloseAt: Date }): boolean {
-  const now = process.env.SIS_TIME_OVERRIDE ? new Date(process.env.SIS_TIME_OVERRIDE) : new Date();
+  const now = sisNow();
   return now >= term.regOpenAt && now <= term.regCloseAt;
+}
+
+function addDropWindowOpen(term: { regOpenAt: Date; addDropCloseAt: Date }): boolean {
+  const now = sisNow();
+  return now >= term.regOpenAt && now <= term.addDropCloseAt;
 }
 
 /**
@@ -70,7 +83,11 @@ export async function submitRegistration(userId: string, planId: string): Promis
     // running state inside the transaction
     const acceptedSections = [...enrolledSections.map((e) => e.section)];
     let creditRunning = 0;
+    const countedCourses = new Set<string>();
     for (const e of enrolledSections) {
+      // tutorials share the course credits with their lecture — count each course once
+      if (countedCourses.has(e.section.courseId)) continue;
+      countedCourses.add(e.section.courseId);
       const c = await tx.course.findUniqueOrThrow({ where: { id: e.section.courseId } });
       creditRunning += c.credits;
     }
@@ -105,11 +122,15 @@ export async function submitRegistration(userId: string, planId: string): Promis
           fail(eligibility.code as FailReason, eligibility.reasonZh, eligibility.reasonEn);
         } else if (availableSeats(section) <= 0) {
           // full: waitlist if open, otherwise failed
-          if (section.waitlistCapacity > section.waitlistCount + (waitlistJoined[section.id] ?? 0)) {
-            await tx.section.update({ where: { id: section.id }, data: { waitlistCount: { increment: 1 } } });
-            waitlistJoined[section.id] = (waitlistJoined[section.id] ?? 0) + 1;
+          const wlClaim = await tx.section.updateMany({
+            where: { id: section.id, waitlistCount: { lt: section.waitlistCapacity } },
+            data: { waitlistCount: { increment: 1 } },
+          });
+          if (wlClaim.count > 0) {
+            // position is authoritative: read back after the atomic increment
+            const after = await tx.section.findUniqueOrThrow({ where: { id: section.id } });
             out.status = "waitlist";
-            out.waitlistPosition = section.waitlistCount + waitlistJoined[section.id];
+            out.waitlistPosition = after.waitlistCount;
           } else {
             fail("full", `课程已满额${section.reservedQuota > 0 ? "（部分名额为预留名额）" : ""}`, "Class is full");
           }
@@ -142,7 +163,23 @@ export async function submitRegistration(userId: string, planId: string): Promis
           out.failDetailEn = "Class is full";
         } else {
           if (item.tutorialSection) {
-            await tx.section.updateMany({ where: { id: item.tutorialSection.id }, data: { enrolledCount: { increment: 1 } } });
+            const tutClaim = await tx.section.updateMany({
+              where: { id: item.tutorialSection.id, enrolledCount: { lt: item.tutorialSection.capacity - item.tutorialSection.reservedQuota } },
+              data: { enrolledCount: { increment: 1 } },
+            });
+            if (tutClaim.count === 0) {
+              // tutorial filled up concurrently — release the lecture seat we just claimed
+              await tx.section.update({ where: { id: section.id }, data: { enrolledCount: { decrement: 1 } } });
+              out.status = "failed";
+              out.failReason = "tutorial_full";
+              out.failDetailZh = `辅导课班次 ${item.tutorialSection.sectionCode} 已满额`;
+              out.failDetailEn = `Tutorial section ${item.tutorialSection.sectionCode} is full`;
+              await tx.registrationItem.create({
+                data: { registrationId: registration.id, sectionId: section.id, status: out.status, failReason: out.failReason, failDetailZh: out.failDetailZh, failDetailEn: out.failDetailEn, waitlistPosition: null },
+              });
+              outcomes.push(out);
+              continue;
+            }
             await tx.enrollment.upsert({
               where: { userId_sectionId_termId: { userId, sectionId: item.tutorialSection.id, termId: term.id } },
               update: { status: "enrolled", droppedAt: null },
@@ -185,9 +222,18 @@ export async function dropEnrollment(userId: string, sectionId: string): Promise
   return db.$transaction(async (tx) => {
     const enrollment = await tx.enrollment.findFirst({
       where: { userId, sectionId, status: "enrolled" },
-      include: { section: true },
+      include: { section: true, term: true },
     });
     if (!enrollment) return { error: "未注册该课程", code: "not_enrolled" };
+    // dropping a tutorial alone is meaningless — operate on the lecture so the whole course goes
+    if (enrollment.section.kind === "TUT") {
+      const lec = await tx.enrollment.findFirst({
+        where: { userId, termId: enrollment.termId, status: "enrolled", section: { courseId: enrollment.section.courseId, kind: "LEC" } },
+      });
+      if (lec) return dropEnrollment(userId, lec.sectionId);
+      return { error: "不能单独退选辅导课班次", code: "tutorial_only" };
+    }
+    if (!addDropWindowOpen(enrollment.term)) return { error: "当前不在加退选开放时间内", code: "time_window" };
     await tx.enrollment.update({ where: { id: enrollment.id }, data: { status: "dropped", droppedAt: new Date() } });
     await tx.section.update({ where: { id: sectionId }, data: { enrolledCount: { decrement: 1 } } });
     // release the paired tutorial of the same course if enrolled

@@ -77,10 +77,12 @@ export default function LoginPage() {
           {busy && <Loader2 size={15} className="spin" />}
           登录 / Sign in
         </Button>
-        <p className="login-hint">
-          演示账号：demo / demo2 / demo3，密码 demo123456。
-          使用真实学号登录将通过学校统一认证（ADFS）验证。
-        </p>
+        {process.env.NODE_ENV !== "production" && (
+          <p className="login-hint">
+            演示账号：demo / demo2 / demo3，密码 demo123456。
+            使用真实学号登录将通过学校统一认证（ADFS）验证。
+          </p>
+        )}
       </form>
     </div>
   );

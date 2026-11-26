@@ -3,6 +3,7 @@
  * Login/logout endpoints live in app/api/auth/.
  */
 import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
 import type { User } from "@/prisma/generated/client";
 
@@ -25,6 +26,21 @@ export async function getSessionUser(): Promise<User | null> {
     data: { expiresAt: new Date(Date.now() + SESSION_TTL_MS) },
   });
   return session.user;
+}
+
+/**
+ * CSRF defense-in-depth on top of SameSite=Lax: mutating requests must carry
+ * an Origin matching the host, or none at all (same-origin navigations,
+ * curl/server-to-server). Cross-site form posts always carry a foreign Origin.
+ */
+export function checkOrigin(req: NextRequest): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.headers.get("host");
+  } catch {
+    return false;
+  }
 }
 
 export function unauthorized() {

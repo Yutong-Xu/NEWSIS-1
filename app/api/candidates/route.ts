@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
-import { getSessionUser, unauthorized } from "@/lib/db/auth";
+import { getSessionUser, unauthorized, checkOrigin } from "@/lib/db/auth";
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -22,6 +22,7 @@ export async function GET() {
 
 /** POST /api/candidates { courseId } — add candidate (undismisses if previously dismissed). */
 export async function POST(req: NextRequest) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   let body: { courseId?: string };
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
 
 /** DELETE /api/candidates?courseId= — soft-dismiss (undoable, matches the prototype's toast undo). */
 export async function DELETE(req: NextRequest) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   const courseId = req.nextUrl.searchParams.get("courseId");

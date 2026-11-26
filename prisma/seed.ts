@@ -111,7 +111,10 @@ async function main() {
   // must reach the SSO path now. cascades to their plans/enrollments/sessions.
   await db.user.deleteMany({ where: { authSource: "demo", username: null } });
 
-  for (const u of DEMO_USERS) {
+  // demo accounts exist for development only — seeding them in production would
+  // hand the world three known-credential accounts with populated histories.
+  const seedDemo = process.env.NODE_ENV !== "production" || process.env.SIS_SEED_DEMO === "1";
+  for (const u of seedDemo ? DEMO_USERS : []) {
     const passwordHash = bcrypt.hashSync(u.password, 10);
     await db.user.upsert({
       where: { studentNo: u.studentNo },

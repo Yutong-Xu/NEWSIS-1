@@ -39,11 +39,23 @@ export default function AppLoader() {
   const enrollmentRes = useApiResource<{ items: ApiEnrollment[] }>(authChecked && me ? "/api/enrollment" : null);
   const termRes = useApiResource<ApiTerm>(authChecked && me ? "/api/term" : null);
 
+  const failed = [coursesRes, plansRes, candidatesRes, enrollmentRes, termRes].find((r) => r.error);
   if (!me || !coursesRes.data || !plansRes.data || !candidatesRes.data || !enrollmentRes.data || !termRes.data) {
     return (
       <div className="login-shell">
         <div className="login-card" style={{ alignItems: "center", textAlign: "center" }}>
-          <p>正在加载学生工作台… / Loading your workspace…</p>
+          {failed ? (
+            <>
+              <p>加载失败 / Failed to load: {String(failed.error)}</p>
+              <p>
+                <a href="/login" style={{ color: "var(--primary)" }}>重新登录 / Sign in again</a>
+                {" · "}
+                <a href="/" style={{ color: "var(--primary)" }} onClick={(e) => { e.preventDefault(); location.reload(); }}>重试 / Retry</a>
+              </p>
+            </>
+          ) : (
+            <p>正在加载学生工作台… / Loading your workspace…</p>
+          )}
         </div>
       </div>
     );
@@ -53,9 +65,7 @@ export default function AppLoader() {
   // inject server data into the legacy module array the components read.
   // done before the first child render so all render-time computations see it.
   const adapted = rawCourses.map(adaptCourse);
-  if (legacyCourses.length !== adapted.length || legacyCourses.some((c, i) => c.id !== adapted[i].id)) {
-    legacyCourses.splice(0, legacyCourses.length, ...adapted);
-  }
+  legacyCourses.splice(0, legacyCourses.length, ...adapted);
   const data: AppData = {
     me,
     term: termRes.data,

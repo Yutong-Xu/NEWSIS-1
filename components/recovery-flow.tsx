@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, CircleX, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { type Course, evaluateBackups, slot } from '@/lib/courses';
-import { registrationBatch, registrationCheck, type RegistrationResults } from '@/lib/registration';
+import { registrationCheck, type RegistrationResults } from '@/lib/registration';
 import { Timetable } from './timetable';
 import { useLanguage } from './language';
 import { Hint } from './hint';
@@ -62,19 +62,21 @@ export function RecoveryFlow({planName,plans,backups,results,registered,onCommit
    try{
     const res=await fetch('/api/registration',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({planId:planIdByName[targetName]??'',confirm:true})});
     const data=await res.json();
-    if(res.ok&&data.items){
+    if(res.ok&&Array.isArray(data.outcomes)){
      batch={results:{},successful:[]};
-     for(const item of data.items){
+     for(const item of data.outcomes){
       batch.results[item.courseId]=item.status==='registered'?'registered':item.status==='waitlist'?'waitlist':'failed';
       const found=target.find(x=>x.id===item.courseId);
       if(item.status==='registered'&&found)batch.successful.push(found);
      }
-     for(const c of newCourses)if(!(c.id in batch.results))batch.results[c.id]='failed';
+     // never fabricate results: courses the server did not report are simply unprocessed
     }else{
-     batch=registrationBatch(newCourses,registered,simulated);
+     batch={results:{},successful:[]};
+     for(const c of newCourses)batch.results[c.id]='failed';
     }
    }catch{
-    batch=registrationBatch(newCourses,registered,simulated);
+    batch={results:{},successful:[]};
+    for(const c of newCourses)batch.results[c.id]='failed';
    }
    onCommit(batch.results,batch.successful);
    if(replaceFrom&&batch.successful.length)onReplace(replaceFrom,batch.successful[0].id);

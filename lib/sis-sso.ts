@@ -118,8 +118,17 @@ export async function sisLogin(username: string, password: string): Promise<SisS
   // Follow the redirect chain (bodies skipped) until the OAuth code redirect.
   let code: string | null = null;
   let r = posted;
+  // redirects may only stay within the university SSO/SIS hosts — anything
+  // else is a poisoned response and must terminate the chain.
+  const ALLOWED_HOSTS = new Set(["sts.cuhk.edu.cn", "sis.cuhk.edu.cn"]);
+  const resolveHop = (loc: string, base: string): string => {
+    const next = loc.startsWith("http") ? loc : base + loc;
+    const host = new URL(next).host;
+    if (!ALLOWED_HOSTS.has(host)) throw new Error(`sso redirect to unexpected host ${host}`);
+    return next;
+  };
   for (let hop = 0; hop < 10 && r.location; hop++) {
-    const next = r.location.startsWith("http") ? r.location : "https://sts.cuhk.edu.cn" + r.location;
+    const next = resolveHop(r.location, "https://sts.cuhk.edu.cn");
     if (next.includes("sis.cuhk.edu.cn") && next.includes("code=")) {
       code = new URL(next).searchParams.get("code");
       await step(jar, "GET", next, undefined, true); // dologin.html bootstrap page
@@ -143,14 +152,14 @@ export async function sisLogin(username: string, password: string): Promise<SisS
     ptlangsel: "ENG",
   }, true);
   if ((after.location ?? "").includes("errorCode")) {
-    throw new Error("PeopleSoft signon failed: " + after.location);
+    throw new Error("PeopleSoft signon failed");
   }
 
   // Follow through to the student homepage (real bodies needed here).
   let home = after;
   let homepageHtml = "";
   for (let hop = 0; hop < 10 && home.location; hop++) {
-    const next = home.location.startsWith("http") ? home.location : "https://sis.cuhk.edu.cn" + home.location;
+    const next = resolveHop(home.location, "https://sis.cuhk.edu.cn");
     home = await step(jar, "GET", next);
     if (home.status === 200 && home.data.length > 2000) {
       homepageHtml = home.data;

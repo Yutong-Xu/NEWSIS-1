@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
-import { getSessionUser, unauthorized } from "@/lib/db/auth";
+import type { Plan, PlanItem } from "@/prisma/generated/client";
+import { getSessionUser, unauthorized, checkOrigin } from "@/lib/db/auth";
 
 export const PLAN_LIMIT = 6;
 
@@ -83,6 +84,7 @@ export async function GET() {
  * Limits: 6 per user, unique non-empty name ≤ 30 chars (P0-2).
  */
 export async function POST(req: NextRequest) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   let body: { name?: string; copyFrom?: string };
@@ -94,13 +96,16 @@ export async function POST(req: NextRequest) {
   const dupe = await db.plan.findFirst({ where: { userId: user.studentNo, name } });
   if (dupe) return err(409, "duplicate_name", "已存在同名计划");
 
-  const plan = await db.plan.create({ data: { userId: user.studentNo, name, termId: "2026-Fall" } });
+  // validate the copy source before creating anything — no orphan plans on failure
+  type PlanWithItems = Plan & { items: PlanItem[] };
+  let source: PlanWithItems | null = null;
   if (body.copyFrom) {
-    const source = await db.plan.findFirst({
-      where: { id: body.copyFrom, userId: user.studentNo },
-      include: { items: true },
-    });
+    source = await db.plan.findFirst({ where: { id: body.copyFrom, userId: user.studentNo }, include: { items: true } });
     if (!source) return err(404, "not_found", "要复制的计划不存在");
+  }
+
+  const plan = await db.plan.create({ data: { userId: user.studentNo, name, termId: "2026-Fall" } });
+  if (source) {
     for (const item of source.items) {
       await db.planItem.create({
         data: {

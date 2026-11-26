@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
-import { getSessionUser, unauthorized } from "@/lib/db/auth";
+import { getSessionUser, unauthorized, checkOrigin } from "@/lib/db/auth";
 import { conflictPairs } from "@/lib/db/domain";
 
 function err(status: number, code: string, message: string, details?: unknown) {
@@ -13,6 +13,7 @@ function err(status: number, code: string, message: string, details?: unknown) {
  * Returns 409 conflict info unless force=true (the frontend's pending-conflict flow).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   const { id: planId } = await params;
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 /** DELETE /api/plans/:id/items?itemId= — remove a plan item. */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   const { id: planId } = await params;
@@ -83,6 +85,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
  * Section swap inside the plan (P0-3: user can change section within the plan).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   const { id: planId } = await params;

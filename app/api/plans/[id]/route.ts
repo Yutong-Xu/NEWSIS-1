@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
-import { getSessionUser, unauthorized } from "@/lib/db/auth";
+import { getSessionUser, unauthorized, checkOrigin } from "@/lib/db/auth";
 
 function err(status: number, code: string, message: string) {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -12,6 +12,7 @@ async function ownedPlan(userId: string, id: string) {
 
 /** PATCH /api/plans/:id { name? } — rename. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   const { id } = await params;
@@ -28,7 +29,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 /** DELETE /api/plans/:id — removes the plan only; enrollments are independent. */
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!checkOrigin(req)) return err(403, "csrf", "跨站请求被拒绝 / Cross-site request rejected");
   const user = await getSessionUser();
   if (!user) return unauthorized();
   const { id } = await params;
