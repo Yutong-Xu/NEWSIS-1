@@ -146,3 +146,33 @@ export function adaptCourse(c: ApiCourse): Course {
   } as Course;
 }
 
+
+/** Re-project a legacy Course onto a chosen lecture section: timing, seats and
+ * section label all follow the chosen LEC; other fields are untouched. */
+export function withSection(base: Course, sectionCode: string | undefined): Course {
+  const sections = (base as Course & { _sections?: ApiSection[] })._sections;
+  if (!sections) return base;
+  const lecs = sections.filter((s) => s.kind === "LEC");
+  const lec = lecs.find((s) => s.sectionCode === sectionCode) ?? lecs[0];
+  if (!lec) return base;
+  const firstMeeting = lec.meetings[0];
+  const daySet = new Set<number>();
+  for (const m of lec.meetings) daySet.add(m.dayOfWeek);
+  return {
+    ...base,
+    days: [...daySet].sort(),
+    start: firstMeeting ? firstMeeting.startMin / 60 : base.start,
+    end: firstMeeting ? firstMeeting.endMin / 60 : base.end,
+    seats: Math.max(0, lec.availableSeats),
+    capacity: lec.capacity,
+    quota: lec.reservedQuota,
+    wait: lec.waitlistCount,
+    section: `Section ${lec.sectionCode}`,
+  };
+}
+
+/** Lecture sections available for a course (for pickers). */
+export function lectureSections(base: Course): ApiSection[] {
+  const sections = (base as Course & { _sections?: ApiSection[] })._sections;
+  return sections ? sections.filter((s) => s.kind === "LEC") : [];
+}

@@ -18,6 +18,7 @@ export interface StoredState {
   registeredIds: string[];
   results: Record<string, 'registered' | 'failed' | 'waitlist'>;
   waitlistPositions: Record<string, number>;
+  sectionChoices?: Record<string, string>; // courseId -> chosen lecture section code (multi-section courses)
 }
 
 const key = (studentNo: string) => `newsis:v1:${studentNo}`;
@@ -36,6 +37,7 @@ export function loadState(studentNo: string): StoredState | null {
       registeredIds: parsed.registeredIds ?? [],
       results: parsed.results ?? {},
       waitlistPositions: parsed.waitlistPositions ?? {},
+      sectionChoices: parsed.sectionChoices ?? {},
     };
   } catch {
     return null;

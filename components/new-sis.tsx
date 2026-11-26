@@ -14,6 +14,7 @@ import { PlanPicker } from './plan-picker';
 import { UpdateFeed } from './update-feed';
 import { registrationCheck, type RegistrationResults } from '@/lib/registration';
 import { loadState, saveState, clearState, type StoredState } from '@/lib/storage';
+import { withSection, lectureSections } from '@/lib/api';
 import { personaTemplates, saveVisitor, clearVisitor } from '@/lib/persona';
 import { DEGREE_REQUIREMENTS } from '@/lib/content';
 import { Button } from '@/components/ui/button';
@@ -35,8 +36,13 @@ export default function NewSIS({data,reloadAll}:{data:import('./app-loader').App
   return out;
  });
 
+ const [sectionChoices,setSectionChoices]=useState<Record<string,string>>(()=>loadState(data.me.studentNo)?.sectionChoices??{});
  const active=plans[activeTab]?activeTab:(Object.keys(plans)[0]??'Plan A');
- const plan=plans[active], list=plannedCourses(plan), issues=conflicts(list), stats=metrics(plan);
+ const plan=plans[active];
+ // section-aware projection: any chosen lecture section re-times/re-seats the course copy
+ const project=(c:Course)=>sectionChoices[c.id]?withSection(c,sectionChoices[c.id]):c;
+ const projectedPlan={...plan,ids:plan.ids};
+ const list=plannedCourses(projectedPlan).map(project), issues=conflicts(list), stats=metrics(plan);
  const [detail,setDetail]=useState<Course|null>(null);const [modal,setModal]=useState('');const [notice,setNotice]=useState('');const [fullId,setFullId]=useState('');const [change,setChange]=useState('课程满额');const [affected,setAffected]=useState('CSC4130');const [kept,setKept]=useState(false);const [compareCourse,setCompareCourse]=useState(false);
  const [query,setQuery]=useState('');const [filters,setFilters]=useState<Record<string,string>>({}); const [available,setAvailable]=useState(false);const [eligible,setEligible]=useState(false);const [candidateQuery,setCandidateQuery]=useState('');
 
@@ -95,8 +101,9 @@ export default function NewSIS({data,reloadAll}:{data:import('./app-loader').App
    registeredIds:registeredCourses.map(c=>c.id),
    results,
    waitlistPositions:wlPositions,
+   sectionChoices,
   });
- },[plans,candidateIds,dismissedCandidates,registeredCourses,results,wlPositions,data.me.studentNo]);
+ },[plans,candidateIds,dismissedCandidates,registeredCourses,results,wlPositions,sectionChoices,data.me.studentNo]);
  function go(id:string){setPage(id);setMobileNav(false);setNotice('')}
  function exploreRecoveryCourses(){
   const name='Recovery Plan';
@@ -153,11 +160,30 @@ export default function NewSIS({data,reloadAll}:{data:import('./app-loader').App
  const registrationReview=registrationCheck(list,registeredCourses);
  const creditLimit=data.term.creditLimit;const reviewBlocked=!list.length||registrationReview.credits>creditLimit||registrationReview.conflicts.length>0||registrationReview.ineligible.length>0||registrationReview.sectionChanges.length>0;
  const filtered=courses.filter(c=>`${c.id} ${c.title} ${c.english} ${c.instructor}`.toLowerCase().includes(query.toLowerCase())&&(!available||c.seats>0)&&(!eligible||c.eligible)&&(!filters.department||c.id.startsWith(filters.department))&&(!filters.level||c.id.replace(/\D/g,'')[0]===filters.level)&&(!filters.credits||String(c.credits)===filters.credits)&&(!filters.day||c.days.includes(Number(filters.day)-1))&&(!filters.time||(filters.time==='上午'?c.start<12:c.start>=12))&&(!filters.instructor||c.instructor===filters.instructor)&&(!filters.category||c.category===filters.category));
- const conflictBanner=pending&&<div className="conflict-banner" role="alert"><TriangleAlert size={18} aria-hidden="true"/><div className="conflict-copy"><strong>{tr(`${pending.target} 时间冲突：${pending.course.id} 与 ${pending.clash.id}`,`${pending.target}: Time Conflict with ${pending.clash.id}`)}</strong><p>{slot(pending.clash,en)} · {tr(`${pending.course.id} 尚未加入计划。`,`${pending.course.id} has not been added to your plan.`)}</p></div><div className="button-row"><Button variant="default" size="sm" className="-sm" onClick={()=>setPending(null)}>{tr('取消','Cancel')}</Button>{pending.course.id==='DDA2081'&&<Button variant="primary" size="sm" className="-sm" onClick={()=>add('DDA2081',true,{alternate:true},pending.target)}>{tr('改选 Section B（无冲突）','Use Section B (no conflict)')}</Button>}<Button variant="text" onClick={()=>add(pending.course.id,true,{},pending.target)}>{tr('仍然加入','Add anyway')}</Button></div></div>;
+ const conflictBanner=pending&&<div className="conflict-banner" role="alert"><TriangleAlert size={18} aria-hidden="true"/><div className="conflict-copy"><strong>{tr(`${pending.target} 时间冲突：${pending.course.id} 与 ${pending.clash.id}`,`${pending.target}: Time Conflict with ${pending.clash.id}`)}</strong><p>{slot(pending.clash,en)} · {tr(`${pending.course.id} 尚未加入计划。`,`${pending.course.id} has not been added to your plan.`)}</p></div><div className="button-row"><Button variant="default" size="sm" className="-sm" onClick={()=>setPending(null)}>{tr('取消','Cancel')}</Button>{(()=>{
+  // offer a switch to any lecture section of the conflicting course that fits the plan
+  const secs=lectureSections(pending.course);
+  const fit=secs.find(s=>{
+   const trial=withSection(pending.course,s.sectionCode);
+   return !conflictWith(plannedCourses(plans[pending.target]??plan),trial);
+  });
+  if(secs.length<2||!fit)return null;
+  return <Button variant="primary" size="sm" className="-sm" onClick={()=>{
+   setSectionChoices(sc=>({...sc,[pending.course.id]:fit.sectionCode}));
+   add(pending.course.id,true,{alternate:true},pending.target);
+  }}>{tr(`改选 ${fit.sectionCode}（无冲突）`,`Switch to ${fit.sectionCode} (no conflict)`)}</Button>
+ })()}<Button variant="text" onClick={()=>add(pending.course.id,true,{},pending.target)}>{tr('仍然加入','Add anyway')}</Button></div></div>;
  const fitPanel=(d:Course)=>{const rows:[string,React.ReactNode,boolean?][]=[[tr('授课教授','Professor'),d.instructor],[tr('学分','Credits'),d.credits],[tr('上课时间','Time'),slot(d,en)],[tr('课程容量','Capacity'),d.capacity],[tr('已预选','Pre-enrolled'),enrolled(d)],[tr('预计剩余名额','Est. seats remaining'),d.seats],[tr('面向学生','Target students'),d.target?tr(d.target,'CSE Year 3–4'):tr('本科生','Undergraduates')],[tr('先修要求','Prerequisite'),d.eligible?tr('已满足 ✓','Satisfied ✓'):tr('未满足','Not satisfied'),d.eligible],[tr('专业限制','Program restriction'),tr('符合 ✓','Eligible ✓'),true],[tr('计入要求','Counts toward'),`${cat(d.category)} ✓`,true],[tr('评分','Rating'),`${d.rating??'—'} / 5 · ${d.reviews??0} ${tr('条学生评价','student reviews')}`],[tr('热度','Popularity'),d.demand==='高'?tr('高','High'):d.demand==='中'?tr('中','Medium'):tr('低','Low')]];return <section className="fit-panel" aria-label={tr('这门课适合我吗？','Is this course suitable for me?')}><h3>{tr('这门课适合我吗？','Is this course suitable for me?')}</h3><dl className="fit-grid">{rows.map(([k,v,good])=><div key={k} className={good===true?'good':good===false?'bad':''}><dt>{k}</dt><dd>{v}</dd></div>)}</dl></section>};
  const plannedPanel=<section className="planned-courses" aria-label={tr('已加入计划的课程','Courses in your plan')}><h3>{tr(`已加入计划 · ${list.length} 门`,`In your plan · ${list.length} courses`)}</h3>{!list.length&&<p className="muted">{tr('计划暂无课程，点击候选课程的「加入计划」开始规划。','No courses yet. Use Add to Plan on a candidate to start.')}</p>}{list.map(c=><div className={`planned-row ${c.id==='CSC4130'?'primary-course':''}`} key={c.id}>
   <div className="planned-top"><div className="planned-main"><Button variant="text" className="course-link" onClick={()=>setDetail(c)}><b>{c.id}</b><span>{c.title}</span></Button>{courseUpdates[c.id]&&<Button variant="bare" aria-expanded={changedCourse===c.id} onClick={()=>setChangedCourse(changedCourse===c.id?null:c.id)} className="updated-badge">{tr('已更新','Updated')}</Button>}{c.id==='CSC4130'&&!courseUpdates[c.id]&&!updateKept&&<Button variant="bare" aria-expanded={updateOpen} onClick={()=>setUpdateOpen(v=>!v)} className="updated-badge">{tr('已更新','Updated')}</Button>}</div><Button variant="default" size="sm" className="-sm" aria-label={tr(`从计划中移除 ${c.id}`,`Remove ${c.id} from plan`)} onClick={()=>removeFromPlan(c.id)}>{tr('移除','Remove')}</Button></div>
   <small className="planned-meta">{slot(c,en)} · {c.credits} {tr('学分','credits')} · <span className="counts-inline"><Check size={12} aria-hidden="true"/>{tr(`计入${c.category}`,`Counts toward ${catEn[c.category]}`)}</span></small>
+  {(()=>{
+   // lecture section picker for multi-section courses — the choice persists per persona
+   const secs=lectureSections(c);
+   if(secs.length<2)return null;
+   const current=sectionChoices[c.id]??secs[0].sectionCode;
+   return <small className="planned-meta section-picker"><label>{tr('班次','Section')}<Select aria-label={tr(`${c.id} 班次`,`${c.id} section`)} value={current} onChange={v=>setSectionChoices(sc=>({...sc,[c.id]:v}))}>{secs.map(s=><option key={s.sectionCode} value={s.sectionCode}>{s.sectionCode}</option>)}</Select></label></small>
+  })()}
   {courseUpdates[c.id]&&changedCourse===c.id&&<div className="update-panel" role="region" aria-label={tr('变更内容','What changed')}><strong>{tr('变更内容','What changed')}</strong><div className="update-diff"><span><small>{tr('原信息','Previous')}</small><s>{courseUpdates[c.id].previous}</s></span><ArrowRight size={14}/><span><small>{tr('更新后','Updated')}</small><b>{courseUpdates[c.id].next}</b></span></div><div className="button-row"><Button variant="default" size="sm" className="-sm" onClick={()=>acknowledgeUpdate(c.id)}>{tr('保留课程','Keep Course')}</Button><Button variant="primary" size="sm" className="-sm" onClick={()=>replaceCourse(c.id)}>{tr('替换课程','Replace Course')}</Button></div></div>}
   {c.id==='CSC4130'&&!courseUpdates[c.id]&&updateOpen&&!updateKept&&<div className="update-panel" role="region" aria-label={tr('变更内容','What changed')}><strong>{tr('变更内容 · 上课时间','What changed · Meeting time')}</strong><div className="update-diff"><span><small>{tr('原时间','Previous')}</small><s>{tr('周二 / 周四 13:00–14:20','Tue / Thu 13:00–14:20')}</s></span><ArrowRight size={14} aria-hidden="true"/><span><small>{tr('更新后','Updated')}</small><b>{tr('周二 / 周四 14:00–15:20','Tue / Thu 14:00–15:20')}</b></span></div><div className="button-row"><Button variant="default" size="sm" className="-sm" onClick={()=>{setUpdateKept(true);setUpdateOpen(false)}}>{tr('保留课程','Keep Course')}</Button><Button variant="primary" size="sm" className="-sm" onClick={()=>replaceCourse(c.id)}>{tr('替换课程','Replace Course')}</Button></div></div>}
   {c.id==='CSC4130'&&<div className="backup-plan"><div className="backup-plan-head"><span>{tr('优先级','Priority')}<Hint text={tr('优先级：注册时先处理哪门课程，也决定首选不可用时如何推荐备选。','Priority: which course is handled first, and how backups are suggested if it becomes unavailable.')}/></span><span className="tag priority-tag">{tr('1 — 最高','1 — Highest')}</span></div><strong className="backup-plan-title">{tr('备选课程','Backup Courses')}</strong><ol className="backup-rank">{backups.map((id,i)=>{const b=findCourse(id);return <li key={id} draggable onDragStart={e=>{e.dataTransfer.setData('backup',id);e.dataTransfer.effectAllowed='move'}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const s=e.dataTransfer.getData('backup');if(s&&s!==id)moveBackup(s,backups.indexOf(id)-backups.indexOf(s))}}><GripVertical size={14} aria-hidden="true"/><span className="rank-num">{i+1}</span><Button variant="text" className="course-link" onClick={()=>setDetail(b)}><b>{b.id}</b></Button><span className="backup-name">{b.title}</span><small className={b.seats>0?'':'full'}>{b.seats>0?tr(`${b.seats} 余位`,`${b.seats} seats`):tr('已满','Full')}</small><Button variant="icon" className="icon-" aria-label={tr(`上移 ${id}`,`Move ${id} up`)} disabled={i===0} onClick={()=>moveBackup(id,-1)}><ArrowUp size={13}/></Button><Button variant="icon" className="icon-" aria-label={tr(`下移 ${id}`,`Move ${id} down`)} disabled={i===backups.length-1} onClick={()=>moveBackup(id,1)}><ArrowDown size={13}/></Button></li>})}</ol><p className="muted backup-note">{tr('若首选课程不可用，New SIS 会推荐优先级最高的有效备选课程。','If your first choice becomes unavailable, New SIS will suggest the highest-priority valid backup.')}</p></div>}
