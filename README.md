@@ -1,110 +1,38 @@
-# New SIS — Full-Stack Course Registration System
+# New SIS — Interactive Course Registration Prototype
 
-**CSC4130 / CSC3160 Assignment · CUHK-Shenzhen**
+**CUHK-Shenzhen CSC4130 / CSC3160 Assignment 2 — Undergraduate Team 2 — Phase 4**
 
-New SIS is a course planning and registration workspace for undergraduates at CUHK-Shenzhen. Next.js frontend + API routes + Prisma/SQLite for **read-only reference data** (catalog, degree requirements, accounts), with optional real-university SSO verification (ADFS). **All simulated write operations — plans, candidates, registration, waitlist, drops — live in the browser's localStorage**, keyed per student number; the server database stores no registration outcomes, and nothing is ever written to the university system.
+New SIS is a course planning and registration workspace for undergraduates at
+CUHK-Shenzhen. It is a **fully static browser application**: no backend, no
+database server, no login — open it and you are in.
 
-## Architecture
+## Data boundary (final architecture)
 
-```
-┌─────────────────────────────────────────────┐
-│ Browser                                     │
-│  React components (visual structure kept    │
-│  from the high-fidelity prototype)          │
-└──────────────┬──────────────────────────────┘
-               │ fetch /api/*
-┌──────────────▼──────────────────────────────┐
-│ Next.js 16 API routes (app/api/*)           │
-│  auth · courses · plans · candidates ·      │
-│  registration · enrollment · progress ·     │
-│  term · notifications                       │
-├─────────────────────────────────────────────┤
-│ lib/db/registration-service.ts              │
-│  transactional registration engine:         │
-│  eligibility → conflict → seat decrement    │
-│  (conditional atomic updateMany) → waitlist │
-├─────────────────────────────────────────────┤
-│ Prisma 6 + SQLite (dev.db)                  │
-│  11 tables: users, sessions, courses,       │
-│  sections, meetings, plans, candidates,     │
-│  registrations, enrollments, terms,         │
-│  requirements, notifications                │
-└─────────────────────────────────────────────┘
-```
+| Storage | Content |
+|---|---|
+| **Static modules** (`lib/seed/catalog.ts`, `lib/content.ts`) | Fixed reference data: course catalog, sections, degree requirements, term windows, notifications |
+| **Browser localStorage** | Everything personal: the visitor persona (random per browser), plans, candidates, registration/waitlist/drop results, language preference |
+| **Nothing else** | No server database, no school-system integration of any kind |
 
-- **Seat accounting is race-free**: seats decrement via `UPDATE … WHERE enrolledCount + reservedQuota < capacity` — a conditional atomic update; zero affected rows means full, no check-then-write race.
-- **Waitlist**: when a section is full with open waitlist capacity, the registration item records the queue position (`wl#N`).
-- **Tutorials**: lecture sections carry linked tutorial sections; enrollment creates both records.
-- **Auth**: demo accounts are bcrypt-verified locally; any other student number is verified against the university ADFS SSO (`lib/sis-sso.ts`, reverse-engineered and verified end-to-end). Sessions are random-token cookies in the Session table.
+- **No login**: each browser gets a random UUID on first visit. The UUID
+  deterministically assigns one of three persona templates (`lib/persona.ts`) —
+  a CSE junior, a CSE freshman, or an SME senior — each with a coherent academic
+  history that drives eligibility checks, so different visitors experience
+  different restriction scenarios.
+- **Registration is a browser-local simulation** (`lib/registration.ts`
+  `submitRegistration`): priority-ordered validation (time window → already
+  enrolled → eligibility → time conflict → credit limit → seats), waitlist
+  positions for full courses, results persisted in localStorage across reloads.
 
 ## Run it
 
-You need **Node.js 22+** and **pnpm**.
-
 ```sh
-pnpm install --frozen-lockfile
-cp .env.example .env        # DATABASE_URL="file:./dev.db"
-npx prisma migrate deploy   # create the database
-node --experimental-strip-types prisma/seed.ts   # seed courses + demo users
-pnpm dev                    # http://localhost:3000
+pnpm install
+pnpm dev    # http://localhost:3000
 ```
 
-### Demo accounts
+No environment variables, no database setup, no accounts.
 
-| Username | Password | Notes |
-|---|---|---|
-| `demo` | `demo123456` | 林语晴 · CSE Year 3 |
-| `demo2` | `demo123456` | 陈可 · SME Year 2 |
-| `demo3` | `demo123456` | 王博 · CSE Year 4 |
+## Stack
 
-Demo accounts use usernames, never student numbers — so any real student number reaches the SSO path.
-
-Any **other** student number is verified against the real CUHK-Shenzhen ADFS SSO. This requires campus-network reachability of `sts.cuhk.edu.cn` and `sis.cuhk.edu.cn`; off campus it simply rejects the login.
-
-## API surface
-
-| Endpoint | Methods | Purpose |
-|---|---|---|
-| `/api/auth/login` `/logout` `/me` | POST/GET | demo bcrypt or ADFS-SSO login, session cookies |
-| `/api/courses` | GET | catalog search/filter; section availability; eligibility per user |
-| `/api/plans` `[id]` `[id]/items` `[id]/diff` | GET/POST/DELETE | plan CRUD, item add/remove, enrollment-based diff |
-| `/api/candidates` | GET/POST/DELETE | candidate list |
-| `/api/registration` | GET/POST | submit a plan transactionally; per-course outcomes |
-| `/api/enrollment` | GET/POST | enrolled sections; drop / safe-swap |
-| `/api/progress` | GET | completed/enrolled/planned credits vs degree requirements |
-| `/api/term` | GET | registration windows, credit limit, server time |
-| `/api/notifications` | GET | user + broadcast notifications |
-
-## Tests
-
-```sh
-node tests/registration.test.cjs   # domain logic: conflicts, eligibility, seat accounting
-```
-
-## Project layout
-
-```
-app/            Next.js app router pages + API routes
-components/     React UI (visual structure preserved from prototype)
-lib/
-  api.ts        frontend fetch layer + hooks + legacy-shape adapter
-  courses.ts    legacy Course type + pure timetable/conflict helpers
-  sis-sso.ts    verified programmatic ADFS+PeopleSoft login client
-  db/
-    client.ts   Prisma singleton
-    auth.ts     session resolution helpers
-    domain.ts   conflict/eligibility/seat domain logic
-    registration-service.ts  transactional registration engine
-  seed/
-    catalog.ts  17 courses with LEC/TUT sections (PeopleSoft field structure)
-    users.ts    demo accounts, academic records
-prisma/
-  schema.prisma 11-model schema
-  seed.ts       idempotent seed (upsert, safe to re-run)
-DESIGN.md       full design document incl. real-SIS comparison
-```
-
-## Notes
-
-- SQLite is the development default; the schema stays Postgres-compatible — switching is a connection-string change.
-- See `DESIGN.md` for the full comparison with the real sis.cuhk.edu.cn (PeopleSoft) and the design rationale.
+Next.js 16 + React 19 + TypeScript, Tailwind CSS 4, base-ui/react primitives.

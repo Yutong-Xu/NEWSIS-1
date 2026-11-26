@@ -42,7 +42,7 @@ export function UpdateFeed({onViewPlan}:{onViewPlan:()=>void}) {
   const selected = items.find(n => n.id === selectedId);
 
   useEffect(() => {
-    fetch('/api/notifications').then(r => r.ok ? r.json() : { items: [] }).then(d => setItems(d.items ?? [])).catch(() => {});
+    import('@/lib/content').then(m => setItems(m.NOTIFICATIONS));
   }, []);
 
   return <section className="card updates-card">

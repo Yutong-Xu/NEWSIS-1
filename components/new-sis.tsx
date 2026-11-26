@@ -14,6 +14,8 @@ import { PlanPicker } from './plan-picker';
 import { UpdateFeed } from './update-feed';
 import { registrationCheck, type RegistrationResults } from '@/lib/registration';
 import { loadState, saveState, type StoredState } from '@/lib/storage';
+import { getPersona } from '@/lib/persona';
+import { DEGREE_REQUIREMENTS } from '@/lib/content';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -68,7 +70,7 @@ export default function NewSIS({data,reloadAll}:{data:import('./app-loader').App
  const [registeredCourses,setRegisteredCourses]=useState<Course[]>(()=>{
   const ids=new Set(loadState(data.me.studentNo)?.registeredIds??[]);
   return courses.filter(c=>ids.has(c.id));
- });const [mobileNav,setMobileNav]=useState(false);const [notifCount,setNotifCount]=useState(0);useEffect(()=>{fetch('/api/notifications').then(r=>r.ok?r.json():{items:[]}).then(d=>setNotifCount((d.items??[]).length)).catch(()=>{})},[]);
+ });const [mobileNav,setMobileNav]=useState(false);const [notifCount,setNotifCount]=useState(0);useEffect(()=>{import('@/lib/content').then(m=>setNotifCount(m.NOTIFICATIONS.length))},[]);
  function updatePlan(next:Partial<Plan>){setPlans(p=>({...p,[active]:{...p[active],...next,saved:false}}))}
  useEffect(()=>{
   saveState(data.me.studentNo,{
@@ -171,9 +173,20 @@ function AcademicProgress({tr,enrolledCourses,plannedList}:{tr:(z:string,e:strin
  const creditsOf=(cs:Course[])=>cs.reduce((s,c)=>s+c.credits,0);
  const byCat=(cs:Course[])=>{const out:Record<string,number>={};for(const c of cs){const k=catMap[c.category]??'free_elective';out[k]=(out[k]??0)+c.credits}return out};
  const enrolledTotal=creditsOf(enrolledCourses),enrolledByCat=byCat(enrolledCourses),plannedByCat=byCat(plannedList),plannedTotal=creditsOf(plannedList);
- const [prog,setProg]=useState<any>(null);
- useEffect(()=>{import('@/lib/api').then(({api})=>api('/api/progress').then(setProg).catch(()=>{}))},[]);
- if(!prog)return <div className="card" style={{padding:20}}>{tr('正在加载学业进度…','Loading academic progress…')}</div>;
+ const prog=(()=>{
+  const persona=getPersona();
+  const reqs=DEGREE_REQUIREMENTS.filter(r=>r.major===persona.major);
+  const completedCredits=persona.completed.reduce((s,c)=>s+c.credits,0);
+  // completed per category: only courses present in the catalog can be attributed; others count toward free elective
+  const catOf:Record<string,string>={};
+  for(const c of courses)catOf[c.id]=catMap[c.category]??'free_elective';
+  const byCatDone:Record<string,number>={};
+  for(const cc of persona.completed){const k=catOf[cc.courseCode]??'free_elective';byCatDone[k]=(byCatDone[k]??0)+cc.credits}
+  return {
+   completedCredits,
+   requirements:reqs.map(r=>({category:r.category,labelZh:r.labelZh,requiredCredits:r.requiredCredits,completed:r.category==='total'?completedCredits:(byCatDone[r.category]??0)})),
+  };
+ })();
  const catLabel:Record<string,string>={major_required:tr('专业必修','Major Required'),major_elective:tr('专业选修','Major Elective'),general_education:tr('通识教育','General Education'),free_elective:tr('自由选修','Free Elective')};
  return <div className="summary-grid">
   <Summary icon={<GraduationCap size={20}/>} title={tr('已修学分','Completed')} value={String(prog.completedCredits)} suffix={`/ ${prog.requirements?.find((r:any)=>r.category==='total')?.requiredCredits??120}`} foot={tr(`已注册 ${enrolledTotal} · 计划中 ${plannedTotal} 学分`,`${enrolledTotal} enrolled · ${plannedTotal} planned`)}/>

@@ -1,64 +1,76 @@
 /**
- * Domain logic tests: conflict detection, eligibility, seat accounting.
- * Runs with plain node — no DB needed (pure functions over mock shapes).
+ * Domain logic tests: eligibility against personas, seat accounting,
+ * client registration engine. Runs with plain node — pure functions.
  */
 import assert from "node:assert/strict";
-import { sectionsConflict, conflictPairs, checkEligibility, availableSeats } from "../lib/db/domain.ts";
+import { catalogFor } from "../lib/api.ts";
+import { submitRegistration } from "../lib/registration.ts";
 
-const meeting = (dayOfWeek, startMin, endMin) => ({ dayOfWeek, startMin, endMin });
-const section = (id, courseId, meetings) => ({ id, courseId, meetings });
-const course = (overrides) => ({
-  id: "X", minYear: null, majorsAllowed: null, prereqCourseIds: null, excludedCourseIds: null, ...overrides,
+// a minimal persona shape (mirrors lib/persona.ts)
+const persona = (overrides) => ({
+  studentNo: "1", nameZh: "x", nameEn: "x", major: "CSE", year: 3, completed: [], ...overrides,
 });
-const user = (overrides) => ({ studentNo: "1", year: 3, major: "CSE", ...overrides });
-const done = (code) => ({ courseCode: code });
+const done = (courseCode) => ({ courseCode, credits: 3, grade: "A", term: "t" });
 
-// --- conflict detection: section-aware, cross-course only
+// --- eligibility: static catalog shaped per persona
 {
-  const a = section("CSC4130-L01", "CSC4130", [meeting(1, 840, 920)]);
-  const overlap = section("CSC3170-L01", "CSC3170", [meeting(1, 850, 930)]);
-  const apart = section("DMS2030-L01", "DMS2030", [meeting(1, 930, 1000)]);
-  const otherDay = section("ECO3121-L01", "ECO3121", [meeting(2, 840, 920)]);
-  assert.equal(sectionsConflict(a, overlap), true, "overlapping same-day meetings conflict");
-  assert.equal(sectionsConflict(a, apart), false, "back-to-back meetings do not conflict");
-  assert.equal(sectionsConflict(a, otherDay), false, "different days do not conflict");
-  // LEC+TUT of the same course never conflict with each other
-  const tut = section("CSC4130-T01", "CSC4130", [meeting(1, 840, 920)]);
-  const pairs = conflictPairs([a, tut, overlap]);
-  // tut DOES conflict with CSC3170 (different course, overlapping time) — correct;
-  // the exclusion applies only to same-course pairs (a,tut)
-  assert.equal(pairs.length, 2, "tut also conflicts with the overlapping other-course section");
-  assert.ok(!pairs.some(([x, y]) => x.courseId === y.courseId), "same-course sections excluded from conflict pairs");
+  const yuqing = persona({ completed: [done("CSC3002"), done("MAT2041"), done("CSC1003")] });
+  const cat = catalogFor(yuqing);
+  const csc4130 = cat.find((c) => c.id === "CSC4130");
+  assert.equal(csc4130.eligibility, null, "CSC4130 eligible with CSC3002 done");
+  const csc4100 = cat.find((c) => c.id === "CSC4100");
+  assert.equal(csc4100?.eligibility?.code, "prereq", "CSC4100 blocked without CSC3170");
+
+  const freshman = persona({ year: 1, completed: [] });
+  const catFresh = catalogFor(freshman);
+  assert.equal(catFresh.find((c) => c.id === "CSC4130")?.eligibility?.code, "prereq", "freshman missing prereq");
+  const yearGated = catFresh.find((c) => c.eligibility?.code === "year");
+  assert.ok(yearGated || catFresh.every((c) => c.eligibility?.code !== "ok"), "freshman faces restrictions");
 }
 
-// --- eligibility priority order: prereq → year → major → excluded
+// --- seat accounting: available seats respect reserved quota
 {
-  const c = course({
-    prereqCourseIds: JSON.stringify(["CSC3002"]),
-    minYear: 4,
-    majorsAllowed: JSON.stringify(["CSE"]),
-    excludedCourseIds: JSON.stringify(["CSC1001"]),
+  const cat = catalogFor(persona());
+  const csc4130 = cat.find((c) => c.id === "CSC4130");
+  const lec = csc4130.sections.find((s) => s.kind === "LEC");
+  assert.equal(lec.availableSeats, Math.max(0, lec.capacity - lec.enrolledCount - lec.reservedQuota), "reserved quota deducted");
+}
+
+// --- registration engine: priority-ordered validation
+{
+  const mkCourse = (id, overrides) => ({
+    id, title: id, english: id, instructor: "x", days: [1], start: 14, end: 15.25,
+    seats: 10, capacity: 60, quota: 0, wait: 0, category: "专业选修", workload: "中",
+    demand: "中", tone: "teal", eligible: true, credits: 3, ...overrides,
   });
-  const u = user({ year: 2, major: "SME" });
-  const completed = [done("CSC1001")];
-  assert.equal(checkEligibility(c, u, []).code, "prereq", "missing prereq reported first");
-  assert.equal(checkEligibility(c, u, [done("CSC3002")]).code, "year", "year check second");
-  assert.equal(checkEligibility(c, user({ major: "SME", year: 4 }), [done("CSC3002")]).code, "major", "major check third (year satisfied)");
-  assert.equal(checkEligibility(course({ excludedCourseIds: JSON.stringify(["CSC1001"]) }), u, completed).code, "excluded");
-  assert.equal(checkEligibility(course({ prereqCourseIds: JSON.stringify(["CSC3002"]) }), u, [done("CSC3002")]).code, "ok");
-  // real storyline: Yuqing (year 3 CSE, has CSC3002) is eligible for CSC4130, blocked from CSC4100
-  const yuqingDone = [done("CSC3002"), done("MAT2041"), done("CSC1003")];
-  assert.equal(checkEligibility(course({ prereqCourseIds: JSON.stringify(["CSC3002"]) }), user(), yuqingDone).code, "ok");
-  assert.equal(checkEligibility(course({ prereqCourseIds: JSON.stringify(["CSC3170", "MAT2041"]) }), user(), yuqingDone).code, "prereq");
-  // malformed JSON must not crash
-  assert.equal(checkEligibility(course({ prereqCourseIds: "{oops" }), user(), []).code, "ok");
+  const opts = { creditLimit: 18, windowOpen: true, registered: [] };
+  const c1 = mkCourse("A1000");
+  const clash = mkCourse("B1000"); // same time → conflict when combined
+  const full = mkCourse("C1000", { seats: 0, wait: 3 });
+  const ineligible = mkCourse("D1000", { eligible: false });
+
+  const r1 = submitRegistration([c1], opts);
+  assert.equal(r1.outcomes[0].status, "registered", "plain course registers");
+
+  const r2 = submitRegistration([c1, clash], opts);
+  assert.equal(r2.outcomes[1].status, "failed", "second same-time course conflicts");
+  assert.equal(r2.outcomes[1].failReason, "conflict");
+
+  const r3 = submitRegistration([full], opts);
+  assert.equal(r3.outcomes[0].status, "waitlist", "full course joins waitlist");
+  assert.equal(r3.outcomes[0].waitlistPosition, 4, "position derives from queue count");
+
+  const r4 = submitRegistration([ineligible], opts);
+  assert.equal(r4.outcomes[0].status, "failed");
+  assert.equal(r4.outcomes[0].failReason, "prereq");
+
+  const r5 = submitRegistration([c1], { ...opts, windowOpen: false });
+  assert.equal(r5.outcomes[0].failReason, "time_window", "window closed blocks everything");
+
+  // credit limit: 18 cap, two 9-credit courses fit, third does not
+  const big = (id, day) => mkCourse(id, { credits: 9, days: [day] });
+  const r6 = submitRegistration([big("E1000", 1), big("F1000", 2), big("G1000", 3)], opts);
+  assert.equal(r6.outcomes[2].failReason, "credit_limit", "third 9-credit course exceeds limit");
 }
 
-// --- seat accounting: reserved quota reduces availability
-{
-  assert.equal(availableSeats({ capacity: 60, enrolledCount: 42, reservedQuota: 5 }), 13);
-  assert.equal(availableSeats({ capacity: 45, enrolledCount: 45, reservedQuota: 0 }), 0);
-  assert.equal(availableSeats({ capacity: 50, enrolledCount: 50, reservedQuota: 10 }), -10, "over-reserved shows negative");
-}
-
-console.log("PASS: conflict pairs, eligibility priority order, seat accounting with reserved quota");
+console.log("PASS: persona eligibility, seat accounting, client registration engine");

@@ -1,4 +1,4 @@
-import { conflicts, type Course } from './courses';
+import { conflicts, type Course } from './courses.ts';
 
 export type RegistrationStatus = 'registered' | 'failed' | 'waitlist';
 export type RegistrationResults = Record<string, RegistrationStatus>;

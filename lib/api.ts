@@ -1,12 +1,13 @@
 /**
- * Frontend API layer: fetch helpers + hooks + the compatibility adapter
- * that shapes API course data into the legacy Course interface used by
- * the existing components (lib/courses.ts). Visual structure unchanged.
+ * Static data layer: shapes the seed catalog into the legacy Course interface
+ * the components use, with eligibility computed against the visitor persona.
+ * No network, no server — everything derives from static modules.
  */
-import { useCallback, useEffect, useState } from "react";
-import type { Course } from "@/lib/courses";
+import type { Course } from "./courses.ts";
+import { COURSES, TERM, type CourseSeed } from "./seed/catalog.ts";
+import { getPersona, type Persona } from "./persona.ts";
 
-// ---------- types mirroring the API DTOs ----------
+// ---------- types mirroring the catalog shape ----------
 
 export interface ApiMeeting { dayOfWeek: number; startMin: number; endMin: number; room: string }
 export interface ApiSection {
@@ -42,70 +43,81 @@ export interface ApiMe {
   creditsCompleted: number; authSource: string;
 }
 
-// ---------- fetch helper ----------
+// ---------- static catalog shaping ----------
 
-export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string, public details?: unknown) {
-    super(message);
+function shapeCourse(c: CourseSeed, persona: Persona): ApiCourse {
+  const completed = new Set(persona.completed.map((x) => x.courseCode));
+  let eligibility: ApiCourse["eligibility"] = null;
+  const missing = (c.prereqCourseIds ?? []).filter((p) => !completed.has(p));
+  if (missing.length) {
+    eligibility = { code: "prereq", reasonZh: `缺少先修课程：${missing.join("、")}`, reasonEn: `Missing prerequisite: ${missing.join(", ")}` };
+  } else if (c.minYear != null && persona.year < c.minYear) {
+    eligibility = { code: "year", reasonZh: `仅面向 ${c.minYear} 年级及以上学生（你当前为 ${persona.year} 年级）`, reasonEn: `Open to Year ${c.minYear} and above only (you are Year ${persona.year})` };
+  } else if (c.majorsAllowed?.length && !c.majorsAllowed.includes(persona.major)) {
+    eligibility = { code: "major", reasonZh: `仅面向 ${c.majorsAllowed.join("/")} 专业学生`, reasonEn: `Open to ${c.majorsAllowed.join("/")} majors only` };
+  } else {
+    const hit = (c.excludedCourseIds ?? []).find((e) => completed.has(e));
+    if (hit) eligibility = { code: "excluded", reasonZh: `已修读 ${hit}，不可重复修读本课程`, reasonEn: `You have completed ${hit}, which excludes this course` };
   }
+  return {
+    id: c.id, titleZh: c.titleZh, titleEn: c.titleEn, credits: c.credits, category: c.category,
+    instructorZh: c.instructorZh, instructorEn: c.instructorEn,
+    rating: c.rating ?? null, reviews: c.reviews ?? null,
+    demand: c.demand, workload: c.workload, tone: c.tone,
+    descriptionZh: c.descriptionZh, descriptionEn: c.descriptionEn, grading: c.grading ?? "A–F",
+    targetZh: c.targetZh ?? null, targetEn: c.targetEn ?? null,
+    eligibility,
+    sections: c.sections.map((s) => ({
+      id: `${c.id}-${s.code}`, kind: s.kind, sectionCode: s.code, classNbr: s.classNbr,
+      capacity: s.capacity, enrolledCount: s.enrolled,
+      availableSeats: Math.max(0, s.capacity - s.enrolled - (s.reservedQuota ?? 0)),
+      reservedQuota: s.reservedQuota ?? 0,
+      reservedForZh: s.reservedForZh ?? null, reservedForEn: s.reservedForEn ?? null,
+      waitlistCapacity: s.waitlistCapacity ?? 0, waitlistCount: s.waitlistCount ?? 0,
+      meetings: s.meetings.flatMap((m) => m.days.map((d) => ({ dayOfWeek: d, startMin: m.start, endMin: m.end, room: m.room }))),
+    })),
+  };
 }
 
-export async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: init?.body ? { "content-type": "application/json", ...init?.headers } : init?.headers,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const e = data?.error ?? {};
-    throw new ApiError(res.status, e.code ?? "unknown", e.message ?? `HTTP ${res.status}`, e.details);
-  }
-  return data as T;
+/** Static catalog shaped for the current visitor. */
+export function catalogFor(persona: Persona): ApiCourse[] {
+  return COURSES.map((c) => shapeCourse(c, persona));
 }
 
-// ---------- generic resource hook ----------
-
-export function useApiResource<T>(path: string | null): {
-  data: T | null;
-  loading: boolean;
-  error: string | null;
-  reload: () => void;
-} {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (!path) return;
-    let alive = true;
-    setLoading(true);
-    api<T>(path)
-      .then((d) => { if (alive) { setData(d); setError(null); } })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "error"); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [path, tick]);
-  const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { data, loading, error, reload };
+/** Static term state, computed against the real clock. */
+export function termState(): ApiTerm {
+  const now = new Date();
+  return {
+    id: TERM.id, labelZh: TERM.labelZh, labelEn: TERM.labelEn,
+    regOpenAt: TERM.regOpenAt.toISOString(), regCloseAt: TERM.regCloseAt.toISOString(),
+    addDropCloseAt: TERM.addDropCloseAt.toISOString(),
+    creditLimit: TERM.creditLimit,
+    regOpen: now >= TERM.regOpenAt && now <= TERM.regCloseAt,
+    addDropOpen: now >= TERM.regOpenAt && now <= TERM.addDropCloseAt,
+    serverTime: now.toISOString(),
+  };
 }
 
-// ---------- legacy shape adapter ----------
+/** Persona as the profile shape components expect. */
+export function personaAsMe(persona: Persona): ApiMe {
+  return {
+    studentNo: persona.studentNo, nameZh: persona.nameZh, nameEn: persona.nameEn,
+    major: persona.major, year: persona.year,
+    creditsCompleted: persona.completed.reduce((s, c) => s + c.credits, 0),
+    authSource: "local",
+  };
+}
 
-const minToHour = (m: number) => m / 60;
+// ---------- adapter: ApiCourse -> legacy Course ----------
 
-/**
- * Adapt an API course to the legacy Course shape the components were built on.
- * Section data is attached as `_sections` so new features can use it while
- * the existing rendering keeps working untouched.
- */
-export function adaptCourse(c: ApiCourse): Course & { _sections: ApiSection[]; _eligibility: ApiCourse["eligibility"] } {
-  const lecs = c.sections.filter((s) => s.kind === "LEC");
-  const lec = lecs[0];
-  // collapse meetings: same start/end across days is the norm in our catalog
-  const meetings = lec?.meetings ?? [];
-  const days = meetings.map((m) => m.dayOfWeek).sort();
-  const start = meetings[0] ? minToHour(meetings[0].startMin) : 0;
-  const end = meetings[0] ? minToHour(meetings[0].endMin) : 0;
+export function adaptCourse(c: ApiCourse): Course {
+  const lec = c.sections.find((s) => s.kind === "LEC");
+  const firstMeeting = lec?.meetings[0];
+  const daySet = new Set<number>();
+  for (const m of lec?.meetings ?? []) daySet.add(m.dayOfWeek);
+  const days = [...daySet].sort();
+  const start = firstMeeting ? firstMeeting.startMin / 60 : 9;
+  const end = firstMeeting ? firstMeeting.endMin / 60 : 10;
   const seats = lec ? Math.max(0, lec.availableSeats) : 0;
   return {
     id: c.id,
@@ -131,5 +143,7 @@ export function adaptCourse(c: ApiCourse): Course & { _sections: ApiSection[]; _
     reviews: c.reviews ?? undefined,
     _sections: c.sections,
     _eligibility: c.eligibility,
-  };
+  } as Course;
 }
+
+export { getPersona };
