@@ -1,14 +1,13 @@
 /**
  * Visitor personas — personalization without accounts.
  *
- * Each browser gets a random UUID on first visit (localStorage). The UUID
- * deterministically selects one of the persona templates below, so every
- * visitor sees a coherent academic profile (major / year / completed courses)
- * that drives eligibility checks, degree progress and the demo storylines —
- * with no login, no server, and nothing tying state to a real person.
+ * Each visitor picks a start mode once (fresh / preset, see onboarding) and a
+ * persona template. Templates carry a coherent academic history, so different
+ * visitors experience different eligibility scenarios. Preset mode additionally
+ * seeds in-progress term state; fresh mode starts empty.
  *
- * Templates are deliberately different (year/major/history) so different
- * visitors encounter different restriction scenarios, as the spec requires.
+ * State keys: student numbers are fixed per template so persona switching is
+ * addressable; each persona's simulated state is isolated per key.
  */
 
 export interface CompletedCourse {
@@ -18,6 +17,12 @@ export interface CompletedCourse {
   term: string;
 }
 
+export interface PersonaPreset {
+  plans: Record<string, string[]>;
+  registeredIds: string[];
+  candidates: string[];
+}
+
 export interface Persona {
   studentNo: string;
   nameZh: string;
@@ -25,14 +30,14 @@ export interface Persona {
   major: string;
   year: number;
   completed: CompletedCourse[];
+  preset: PersonaPreset;
 }
 
-interface PersonaTemplate extends Omit<Persona, "studentNo"> {}
-
-const TEMPLATES: PersonaTemplate[] = [
+const TEMPLATES: Persona[] = [
   {
     // the primary storyline persona: CSC3002 done → CSC4130 prereq met;
     // CSC3170+MAT2041 mix missing → CSC4100 blocked; CSC1003 done → excluded from CSC1001
+    studentNo: "900000001",
     nameZh: "林语晴", nameEn: "Yuqing LIN", major: "CSE", year: 3,
     completed: [
       { courseCode: "CSC1003", credits: 3, grade: "A", term: "2024-25 Term 1" },
@@ -49,15 +54,27 @@ const TEMPLATES: PersonaTemplate[] = [
       { courseCode: "GED1001", credits: 2, grade: "A", term: "2025-26 Term 1" },
       { courseCode: "CSC2050", credits: 3, grade: "A-", term: "2025-26 Term 2" },
     ],
+    preset: {
+      plans: { "Plan A": ["CSC3170", "CSC4130", "ENG2001A", "GED2003"] },
+      registeredIds: ["CSC3170", "ENG2001A"],
+      candidates: ["DDA2081"],
+    },
   },
   {
     // freshman: nothing completed — every prereq-gated course is blocked,
-    // year-restricted courses are blocked
+    // year-restricted courses are blocked; preset only uses open courses
+    studentNo: "900000002",
     nameZh: "陈可", nameEn: "Ke CHEN", major: "CSE", year: 1,
     completed: [],
+    preset: {
+      plans: { "Plan A": ["ENG2001A", "GED2003"] },
+      registeredIds: ["GED2003"],
+      candidates: ["ECO3121"],
+    },
   },
   {
     // SME senior: major restriction scenarios invert (ACT open, CSE-targeted gated)
+    studentNo: "900000003",
     nameZh: "王博", nameEn: "Bo WANG", major: "SME", year: 4,
     completed: [
       { courseCode: "ACT1010", credits: 3, grade: "A", term: "2023-24 Term 1" },
@@ -67,51 +84,61 @@ const TEMPLATES: PersonaTemplate[] = [
       { courseCode: "ENG1001", credits: 3, grade: "A", term: "2023-24 Term 1" },
       { courseCode: "GEW1001", credits: 3, grade: "PA", term: "2023-24 Term 1" },
     ],
+    preset: {
+      plans: { "Plan A": ["ECO3121", "GED2003"] },
+      registeredIds: ["ECO3121"],
+      candidates: [],
+    },
   },
 ];
 
+// ---------- visitor record (mode + template choice, persisted once) ----------
+
+export type StartMode = "fresh" | "preset";
+
+export interface VisitorRecord {
+  mode: StartMode;
+  template: number; // index into TEMPLATES
+}
+
 const VISITOR_KEY = "newsis:v1:visitor";
 
-function uuid(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
-
-/** Deterministic template selection from the visitor UUID. */
-function templateIndex(id: string): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return hash % TEMPLATES.length;
-}
-
-/**
- * The visitor's persona. Generated once per browser, stable afterwards.
- * Server-side rendering falls back to the first template (client corrects on hydration).
- */
-export function getPersona(): Persona {
-  if (typeof window === "undefined") {
-    return { studentNo: "900000001", ...TEMPLATES[0] };
-  }
-  let id: string | null = null;
+export function loadVisitor(): VisitorRecord | null {
+  if (typeof window === "undefined") return null;
   try {
-    id = localStorage.getItem(VISITOR_KEY);
-    if (!id) {
-      id = uuid();
-      localStorage.setItem(VISITOR_KEY, id);
+    const raw = localStorage.getItem(VISITOR_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && (parsed.mode === "fresh" || parsed.mode === "preset") && Number.isInteger(parsed.template)) {
+      return parsed as VisitorRecord;
     }
+    return null;
   } catch {
-    id = "fallback";
+    return null;
   }
-  const t = TEMPLATES[templateIndex(id)];
-  // student number derived from the uuid — unique per browser, meaningless anywhere else
-  const num = 900000000 + (templateIndex(id) * 100000) + (id.charCodeAt(0) * 97 + id.charCodeAt(id.length - 1)) % 99999;
-  return { studentNo: String(num), ...t };
 }
 
-/** All templates, for the profile switcher (lets a visitor experience other scenarios). */
-export function personaTemplates(): PersonaTemplate[] {
+export function saveVisitor(record: VisitorRecord): void {
+  try {
+    localStorage.setItem(VISITOR_KEY, JSON.stringify(record));
+  } catch {
+    // storage unavailable — the choice simply won't persist
+  }
+}
+
+export function clearVisitor(): void {
+  try {
+    localStorage.removeItem(VISITOR_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/** The persona templates. Index order is the UI order. */
+export function personaTemplates(): Persona[] {
   return TEMPLATES;
+}
+
+export function personaAt(index: number): Persona {
+  return TEMPLATES[Math.max(0, Math.min(TEMPLATES.length - 1, index))];
 }

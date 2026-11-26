@@ -18,12 +18,12 @@ const steps=[
 ] as const;
 
 type Position={left:number;top:number;side:'top'|'bottom'};
-export function GuidedWalkthrough({run,onNavigate,onAddExampleCandidate,onAddExampleToPlan,onShowCourse,onSearchExample}:{run:number;onNavigate:(page:string)=>void;onAddExampleCandidate:()=>void;onAddExampleToPlan:()=>void;onShowCourse:()=>void;onSearchExample:()=>void}) {
+export function GuidedWalkthrough({run,onNavigate,onAddExampleCandidate,onAddExampleToPlan,onShowCourse,onSearchExample,suppress}:{run:number;onNavigate:(page:string)=>void;onAddExampleCandidate:()=>void;onAddExampleToPlan:()=>void;onShowCourse:()=>void;onSearchExample:()=>void;suppress?:boolean}) {
  const en=useLanguage()==='en',lang=en?1:0;
  const [active,setActive]=useState(false),[step,setStep]=useState(0);
  const [position,setPosition]=useState<Position|null>(null);
  const handledClick=useRef<Event|null>(null);
- useEffect(()=>{let seen=false;try{seen=localStorage.getItem(storageKey)==='done'}catch{}if(run>0||!seen){setStep(0);setActive(true)}},[run]);
+ useEffect(()=>{let seen=false;try{seen=localStorage.getItem(storageKey)==='done'}catch{}if(suppress){if(run>0&&!seen){setStep(0);setActive(true)}return}if(run>0||!seen){setStep(0);setActive(true)}},[run,suppress]);
  function finish(){setActive(false);setPosition(null);try{localStorage.setItem(storageKey,'done')}catch{}}
  const current=steps[step];
  useEffect(()=>{

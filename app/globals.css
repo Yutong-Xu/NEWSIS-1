@@ -459,3 +459,27 @@
 .filter-row .sis-select-trigger{flex:1;min-width:95px}
 .registration-plan-label .sis-select-trigger{min-height:40px}
 .plan-demo-fallback .sis-select-trigger{width:100%}
+
+/* onboarding start screen */
+.onboarding-card{align-items:stretch;max-width:640px;text-align:left}
+.onboarding-card h1{font-size:22px;margin:18px 0 16px}
+.onboarding-options{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.onboarding-options{grid-template-columns:1fr}}
+.onboarding-option{display:flex;flex-direction:column;gap:8px;align-items:flex-start;text-align:left;border:1px solid var(--border);border-radius:12px;padding:18px;background:var(--card);cursor:pointer;font:inherit;color:inherit;transition:border-color .18s,box-shadow .18s}
+.onboarding-option:hover{border-color:var(--primary);box-shadow:0 2px 12px color-mix(in srgb,var(--primary) 12%,transparent)}
+.onboarding-option svg{color:var(--primary)}
+.onboarding-option strong{font-size:15px}
+.onboarding-option span{font-size:12.5px;color:var(--muted-foreground);line-height:1.5}
+.onboarding-option em{font-style:normal;font-size:11px;color:var(--muted-foreground)}
+.onboarding-preset{cursor:default}
+.onboarding-personas{display:flex;flex-direction:column;gap:6px;width:100%;margin:4px 0}
+.onboarding-persona{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:12.5px}
+.onboarding-persona.selected{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,transparent)}
+.onboarding-persona input{accent-color:var(--primary);margin:0}
+.onboarding-persona small{color:var(--muted-foreground);margin-left:auto}
+.onboarding-note{font-size:11.5px;color:var(--muted-foreground);margin-top:16px;text-align:center}
+
+/* profile modal actions */
+.profile-actions{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border);padding-top:12px;margin-top:4px}
+.profile-switch-label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:500}
+.profile-note{font-size:11.5px;color:var(--muted-foreground);line-height:1.5}

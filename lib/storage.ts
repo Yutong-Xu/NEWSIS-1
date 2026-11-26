@@ -45,3 +45,11 @@ export function saveState(studentNo: string, state: StoredState): void {
     // storage full or unavailable — simulation continues in memory
   }
 }
+
+export function clearState(studentNo: string): void {
+  try {
+    localStorage.removeItem(key(studentNo));
+  } catch {
+    // ignore
+  }
+}

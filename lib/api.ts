@@ -5,7 +5,7 @@
  */
 import type { Course } from "./courses.ts";
 import { COURSES, TERM, type CourseSeed } from "./seed/catalog.ts";
-import { getPersona, type Persona } from "./persona.ts";
+import type { Persona } from "./persona.ts";
 
 // ---------- types mirroring the catalog shape ----------
 
@@ -146,4 +146,3 @@ export function adaptCourse(c: ApiCourse): Course {
   } as Course;
 }
 
-export { getPersona };
