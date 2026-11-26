@@ -1,3 +1,3 @@
-import NewSIS from '@/components/new-sis';
+import AppLoader from '@/components/app-loader';
 import { LanguageProvider } from '@/components/language';
-export default function Page() { return <LanguageProvider><NewSIS /></LanguageProvider>; }
+export default function Page() { return <LanguageProvider><AppLoader /></LanguageProvider>; }

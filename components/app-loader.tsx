@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { api, useApiResource, adaptCourse, type ApiCourse, type ApiPlan, type ApiMe, type ApiTerm, type ApiEnrollment } from "@/lib/api";
 import type { Course } from "@/lib/courses";
 import NewSIS from "@/components/new-sis";
+import { courses as legacyCourses } from "@/lib/courses";
 
 export interface AppData {
   me: ApiMe;
@@ -49,6 +50,12 @@ export default function AppLoader() {
   }
 
   const rawCourses = coursesRes.data.items;
+  // inject server data into the legacy module array the components read.
+  // done before the first child render so all render-time computations see it.
+  const adapted = rawCourses.map(adaptCourse);
+  if (legacyCourses.length !== adapted.length || legacyCourses.some((c, i) => c.id !== adapted[i].id)) {
+    legacyCourses.splice(0, legacyCourses.length, ...adapted);
+  }
   const data: AppData = {
     me,
     term: termRes.data,

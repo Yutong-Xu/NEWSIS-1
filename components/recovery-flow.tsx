@@ -15,7 +15,7 @@ type Props = {
  onDetail:(course:Course)=>void; onExplore:()=>void; onRegistered:()=>void; onEdit:()=>void;
 };
 
-export function RecoveryFlow({planName,plans,backups,results,registered,onCommit,onSelectPlan,onReplace,onDetail,onExplore,onRegistered,onEdit}:Props){
+export function RecoveryFlow({planName,plans,backups,results,registered,onCommit,onSelectPlan,onReplace,onDetail,onExplore,onRegistered,onEdit,planIdByName={}}:Props&{planIdByName?:Record<string,string>}){
  const en=useLanguage()==='en';
  const tr=(zh:string,english:string)=>en?english:zh;
  const [busy,setBusy]=useState('');
@@ -55,11 +55,30 @@ export function RecoveryFlow({planName,plans,backups,results,registered,onCommit
   lock.current=true;setBusy(targetName);
   const simulated=simulateFull&&!fallback?'CSC4130':'';
   timer.current=setTimeout(()=>{
-   const batch=registrationBatch(newCourses,registered,simulated);
+   void (async()=>{
+   let batch:{results:RegistrationResults;successful:Course[]};
+   try{
+    const res=await fetch('/api/registration',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({planId:planIdByName[targetName]??'',confirm:true})});
+    const data=await res.json();
+    if(res.ok&&data.items){
+     batch={results:{},successful:[]};
+     for(const item of data.items){
+      batch.results[item.courseId]=item.status==='registered'?'registered':item.status==='waitlist'?'waitlist':'failed';
+      const found=target.find(x=>x.id===item.courseId);
+      if(item.status==='registered'&&found)batch.successful.push(found);
+     }
+     for(const c of newCourses)if(!(c.id in batch.results))batch.results[c.id]='failed';
+    }else{
+     batch=registrationBatch(newCourses,registered,simulated);
+    }
+   }catch{
+    batch=registrationBatch(newCourses,registered,simulated);
+   }
    onCommit(batch.results,batch.successful);
    if(replaceFrom&&batch.successful.length)onReplace(replaceFrom,batch.successful[0].id);
    if(targetName!==planName)onSelectPlan(targetName);
    setSimulateFull(false);setBusy('');lock.current=false;
+   })();
   },1200);
  }
  return <div className="recovery-layout">
