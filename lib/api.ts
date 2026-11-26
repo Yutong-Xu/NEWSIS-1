@@ -25,16 +25,17 @@ export interface ApiCourse {
   eligibility: { code: string; reasonZh: string; reasonEn: string } | null;
   sections: ApiSection[];
 }
-export interface ApiPlanItem { id: string; courseId: string; sectionId: string; tutorialSectionId: string | null }
-export interface ApiPlan { id: string; name: string; items: ApiPlanItem[]; backups: { id: string; courseId: string; sectionId: string }[] }
 export interface ApiTerm {
-  id: string; labelZh: string; labelEn: string; creditLimit: number;
-  regOpenAt: string; regCloseAt: string; addDropCloseAt: string;
-  regOpen: boolean; addDropOpen: boolean;
-}
-export interface ApiEnrollment {
-  sectionId: string; courseId: string; kind: string; sectionCode: string; credits: number;
-  meetings: ApiMeeting[];
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  regOpenAt: string;
+  regCloseAt: string;
+  addDropCloseAt: string;
+  creditLimit: number;
+  regOpen: boolean;
+  addDropOpen: boolean;
+  serverTime: string;
 }
 export interface ApiMe {
   studentNo: string; nameZh: string; nameEn: string; major: string; year: number;
@@ -124,6 +125,7 @@ export function adaptCourse(c: ApiCourse): Course & { _sections: ApiSection[]; _
     tone: c.tone,
     eligible: c.eligibility ? c.eligibility.code === "ok" : true,
     credits: c.credits,
+    section: lec?.sectionCode ? `Section ${lec.sectionCode}` : undefined,
     target: c.targetZh ?? undefined,
     rating: c.rating ?? undefined,
     reviews: c.reviews ?? undefined,

@@ -2,7 +2,7 @@
 
 **CSC4130 / CSC3160 Assignment · CUHK-Shenzhen**
 
-New SIS is a course planning and registration workspace for undergraduates at CUHK-Shenzhen. It is now a **full-stack application**: Next.js frontend + API routes + Prisma/SQLite database, with optional real-university SSO verification (ADFS).
+New SIS is a course planning and registration workspace for undergraduates at CUHK-Shenzhen. Next.js frontend + API routes + Prisma/SQLite for **read-only reference data** (catalog, degree requirements, accounts), with optional real-university SSO verification (ADFS). **All simulated write operations — plans, candidates, registration, waitlist, drops — live in the browser's localStorage**, keyed per student number; the server database stores no registration outcomes, and nothing is ever written to the university system.
 
 ## Architecture
 

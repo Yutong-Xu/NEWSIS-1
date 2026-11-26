@@ -3,8 +3,10 @@ import { db } from "@/lib/db/client";
 import { getSessionUser, unauthorized } from "@/lib/db/auth";
 
 /**
- * GET /api/progress — three-component credit view (P1-12):
- * completed / enrolled / planned, plus per-requirement projected gaps.
+ * GET /api/progress — completed-credit history and degree requirements.
+ * Enrolled/planned credits are simulated browser-side (registration is a
+ * localStorage simulation) and merged by the client; the server only owns
+ * fixed reference data.
  */
 export async function GET() {
   const user = await getSessionUser();
@@ -13,50 +15,30 @@ export async function GET() {
   const completed = await db.completedCourse.findMany({ where: { userId: user.studentNo } });
   const completedCredits = completed.reduce((s, c) => s + c.credits, 0);
 
-  const enrollments = await db.enrollment.findMany({
-    where: { userId: user.studentNo, status: "enrolled", section: { kind: "LEC" } },
-    include: { section: { include: { course: true } } },
-  });
-  const enrolledCredits = enrollments.reduce((s, e) => s + e.section.course.credits, 0);
-  const enrolledByCategory: Record<string, number> = {};
-  for (const e of enrollments) {
-    enrolledByCategory[e.section.course.category] = (enrolledByCategory[e.section.course.category] ?? 0) + e.section.course.credits;
-  }
-
-  const plans = await db.plan.findMany({
-    where: { userId: user.studentNo },
-    include: { items: { where: { role: "primary" }, include: { section: { include: { course: true } } } } },
-  });
-  const planDtos = plans.map((p) => {
-    const credits = p.items.reduce((s, i) => s + i.section.course.credits, 0);
-    const byCategory: Record<string, number> = {};
-    for (const i of p.items) {
-      byCategory[i.section.course.category] = (byCategory[i.section.course.category] ?? 0) + i.section.course.credits;
-    }
-    return { id: p.id, name: p.name, credits, byCategory };
-  });
-
-  const requirements = await db.degreeRequirement.findMany({ where: { major: user.major } });
-  // completed credits per category requires mapping courseCode → category; use course ids where present
-  const catalog = await db.course.findMany({ select: { id: true, category: true } });
-  const catOf = new Map(catalog.map((c) => [c.id, c.category]));
+  // map completed course codes to catalog categories when the course exists
+  const codes = completed.map((c) => c.courseCode);
+  const catalogCourses = await db.course.findMany({ where: { id: { in: codes } }, select: { id: true, category: true } });
+  const catOf = new Map(catalogCourses.map((c) => [c.id, c.category]));
   const completedByCategory: Record<string, number> = {};
   for (const c of completed) {
-    const cat = catOf.get(c.courseCode) ?? "major_required";
+    const cat = catOf.get(c.courseCode) ?? "free_elective";
     completedByCategory[cat] = (completedByCategory[cat] ?? 0) + c.credits;
   }
 
+  const requirements = await db.degreeRequirement.findMany({
+    where: { OR: [{ major: user.major }, { major: "*" }] },
+    orderBy: { category: "asc" },
+  });
+
   return NextResponse.json({
+    totalRequired: requirements.find((r) => r.category === "total")?.requiredCredits ?? 120,
     completedCredits,
-    enrolledCredits,
-    plans: planDtos,
+    completedByCategory,
+    completedCourses: completed.map((c) => ({ courseCode: c.courseCode, credits: c.credits, grade: c.grade, term: c.term })),
     requirements: requirements.map((r) => ({
-      category: r.category,
-      labelZh: r.labelZh,
-      labelEn: r.labelEn,
+      id: r.id, category: r.category, labelZh: r.labelZh, labelEn: r.labelEn,
       requiredCredits: r.requiredCredits,
       completed: r.category === "total" ? completedCredits : (completedByCategory[r.category] ?? 0),
-      enrolled: r.category === "total" ? enrolledCredits : (enrolledByCategory[r.category] ?? 0),
     })),
   });
 }

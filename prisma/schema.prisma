@@ -20,10 +20,6 @@ model User {
   createdAt        DateTime @default(now())
 
   sessions        Session[]
-  plans           Plan[]
-  candidates      Candidate[]
-  registrations   Registration[]
-  enrollments     Enrollment[]
   completedCourses CompletedCourse[]
   notifications   Notification[]
 }
@@ -48,9 +44,6 @@ model Term {
   creditLimit   Float    @default(18)
 
   courses       Course[]
-  plans         Plan[]
-  registrations Registration[]
-  enrollments   Enrollment[]
 }
 
 model Course {
@@ -80,7 +73,6 @@ model Course {
   tone           String  @default("teal") // visual accent, existing UI uses it
 
   sections    Section[]
-  candidates  Candidate[]
   notifications Notification[]
 }
 
@@ -100,10 +92,6 @@ model Section {
   waitlistCount    Int    @default(0)
 
   meetings        Meeting[]
-  planItems       PlanItem[]
-  tutorialOfItems PlanItem[]  @relation("TutorialSection")
-  registrationItems RegistrationItem[]
-  enrollments     Enrollment[]
 
   @@unique([courseId, sectionCode])
 }
@@ -122,91 +110,11 @@ model Meeting {
   @@index([sectionId])
 }
 
-model Plan {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [studentNo], onDelete: Cascade)
-  name      String
-  termId    String
-  term      Term     @relation(fields: [termId], references: [id])
-  createdAt DateTime @default(now())
 
-  items PlanItem[]
 
-  @@unique([userId, name])
-}
 
-model PlanItem {
-  id                String  @id @default(cuid())
-  planId            String
-  plan              Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
-  sectionId         String
-  section           Section @relation(fields: [sectionId], references: [id])
-  tutorialSectionId String?
-  tutorialSection   Section? @relation("TutorialSection", fields: [tutorialSectionId], references: [id])
-  role              String  @default("primary") // primary | backup
-  backupOfItemId    String?
-  priority          Int     @default(0) // ordering for backups / priority list
-  addedAt           DateTime @default(now())
 
-  @@index([planId])
-}
 
-model Candidate {
-  id       String   @id @default(cuid())
-  userId   String
-  user     User     @relation(fields: [userId], references: [studentNo], onDelete: Cascade)
-  courseId String
-  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  addedAt  DateTime @default(now())
-  dismissed Boolean @default(false)
-
-  @@unique([userId, courseId])
-}
-
-model Registration {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [studentNo], onDelete: Cascade)
-  termId      String
-  term        Term     @relation(fields: [termId], references: [id])
-  planId      String?
-  submittedAt DateTime @default(now())
-
-  items RegistrationItem[]
-}
-
-model RegistrationItem {
-  id               String  @id @default(cuid())
-  registrationId   String
-  registration     Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  sectionId        String
-  section          Section @relation(fields: [sectionId], references: [id])
-  status           String // registered | failed | waitlist | dropped
-  failReason       String? // prereq | year | major | excluded | full | conflict | credit_limit | time_window | tutorial_full | tutorial_conflict
-  failDetailZh     String?
-  failDetailEn     String?
-  waitlistPosition Int?
-
-  @@index([registrationId])
-}
-
-model Enrollment {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [studentNo], onDelete: Cascade)
-  sectionId String
-  section   Section   @relation(fields: [sectionId], references: [id])
-  termId    String
-  term      Term      @relation(fields: [termId], references: [id])
-  status    String    @default("enrolled") // enrolled | dropped
-  source    String    @default("plan") // plan | manual | swap
-  createdAt DateTime  @default(now())
-  droppedAt DateTime?
-
-  @@unique([userId, sectionId, termId])
-  @@index([userId, termId, status])
-}
 
 model CompletedCourse {
   id         String  @id @default(cuid())

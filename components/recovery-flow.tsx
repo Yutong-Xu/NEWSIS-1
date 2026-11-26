@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, CircleX, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { type Course, evaluateBackups, slot } from '@/lib/courses';
-import { registrationCheck, type RegistrationResults } from '@/lib/registration';
+import { registrationCheck, submitRegistration, type RegistrationResults } from '@/lib/registration';
 import { Timetable } from './timetable';
 import { useLanguage } from './language';
 import { Hint } from './hint';
@@ -12,12 +12,12 @@ import { Select } from '@/components/ui/select';
 type Props = {
  planName:string; plans:Record<string,Course[]>; backups:string[];
  results:RegistrationResults; registered:Course[];
- onCommit:(results:RegistrationResults,successful:Course[])=>void;
+ onCommit:(results:RegistrationResults,successful:Course[],positions?:Record<string,number>)=>void;
  onSelectPlan:(name:string)=>void; onReplace:(from:string,to:string)=>void;
  onDetail:(course:Course)=>void; onExplore:()=>void; onRegistered:()=>void; onEdit:()=>void;
 };
 
-export function RecoveryFlow({planName,plans,backups,results,registered,onCommit,onSelectPlan,onReplace,onDetail,onExplore,onRegistered,onEdit,planIdByName={}}:Props&{planIdByName?:Record<string,string>}){
+export function RecoveryFlow({planName,plans,backups,results,registered,onCommit,onSelectPlan,onReplace,onDetail,onExplore,onRegistered,onEdit,planIdByName={},creditLimit=18,windowOpen=true}:Props&{planIdByName?:Record<string,string>;creditLimit?:number;windowOpen?:boolean}){
  const en=useLanguage()==='en';
  const tr=(zh:string,english:string)=>en?english:zh;
  const [busy,setBusy]=useState('');
@@ -39,7 +39,7 @@ export function RecoveryFlow({planName,plans,backups,results,registered,onCommit
  function blockers(target:Course[],forFallback=false):string[]{
   const c=registrationCheck(target,registered);const reasons:string[]=[];
   if(!target.length)reasons.push(tr('计划暂无课程。','This plan has no courses.'));
-  if(c.credits>18)reasons.push(tr(`包含已注册课程后共 ${c.credits} 学分，超过 18 学分上限。`,`${c.credits} credits including registered courses exceeds the 18-credit limit.`));
+  if(c.credits>creditLimit)reasons.push(tr(`包含已注册课程后共 ${c.credits} 学分，超过 ${creditLimit} 学分上限。`,`${c.credits} credits including registered courses exceeds the ${creditLimit}-credit limit.`));
   if(c.conflicts.length)reasons.push(tr('时间冲突：','Time conflict: ')+c.conflicts.map(pair=>pair.map(x=>x.id).join(' / ')).join('; '));
   if(c.ineligible.length)reasons.push(tr('未满足选课资格：','Eligibility not met: ')+c.ineligible.map(x=>x.id).join(', '));
   if(c.sectionChanges.length)reasons.push(tr('这些课程的班次与已注册班次不同，请先到加选 / 退选处理：','These sections differ from your registered sections. Use Add / Drop first: ')+c.sectionChanges.map(x=>x.id).join(', '));
@@ -57,38 +57,25 @@ export function RecoveryFlow({planName,plans,backups,results,registered,onCommit
   lock.current=true;setBusy(targetName);
   const simulated=simulateFull&&!fallback?'CSC4130':'';
   timer.current=setTimeout(()=>{
-   void (async()=>{
-   let batch:{results:RegistrationResults;successful:Course[]};
-   try{
-    const res=await fetch('/api/registration',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({planId:planIdByName[targetName]??'',confirm:true})});
-    const data=await res.json();
-    if(res.ok&&Array.isArray(data.outcomes)){
-     batch={results:{},successful:[]};
-     for(const item of data.outcomes){
-      batch.results[item.courseId]=item.status==='registered'?'registered':item.status==='waitlist'?'waitlist':'failed';
-      const found=target.find(x=>x.id===item.courseId);
-      if(item.status==='registered'&&found)batch.successful.push(found);
-     }
-     // never fabricate results: courses the server did not report are simply unprocessed
-    }else{
-     batch={results:{},successful:[]};
-     for(const c of newCourses)batch.results[c.id]='failed';
-    }
-   }catch{
-    batch={results:{},successful:[]};
-    for(const c of newCourses)batch.results[c.id]='failed';
-   }
-   onCommit(batch.results,batch.successful);
+   // simulation: optionally force CSC4130 full for the recovery demo
+   const effectiveTarget=simulated?target.map(c=>c.id===simulated?{...c,seats:0,wait:20}:c):target;
+   const engine=submitRegistration(effectiveTarget,{creditLimit,windowOpen,registered});
+   const batch={results:{} as RegistrationResults,successful:engine.successful};
+   for(const o of engine.outcomes)batch.results[o.courseId]=o.status==='registered'?'registered':o.status==='waitlist'?'waitlist':'failed';
+   for(const c of newCourses)if(!(c.id in batch.results))batch.results[c.id]=enrolledHas(c)?'registered':'failed';
+   function enrolledHas(c:Course){return registered.some(r=>r.id===c.id)}
+   const positions:Record<string,number>={};
+   for(const o of engine.outcomes)if(o.status==='waitlist'&&o.waitlistPosition)positions[o.courseId]=o.waitlistPosition;
+   onCommit(batch.results,batch.successful,positions);
    if(replaceFrom&&batch.successful.length)onReplace(replaceFrom,batch.successful[0].id);
    if(targetName!==planName)onSelectPlan(targetName);
    setSimulateFull(false);setBusy('');lock.current=false;
-   })();
   },1200);
  }
  return <div className="recovery-layout">
   <div className="recovery-main">
    <section className="card enroll-card" aria-labelledby="enroll-title">
-    <div className="enroll-head"><div className="eyebrow">{tr('课程注册 · 本次演示会话','COURSE REGISTRATION · DEMO SESSION')}</div><label className="registration-plan-label">{tr('注册计划','Registration plan')}<Select aria-label={tr('注册计划','Registration plan')} value={planName} disabled={!!busy} onChange={v=>{onSelectPlan(v);setSimulateFull(false)}}>{Object.keys(plans).map(name=><option key={name}>{name}</option>)}</Select></label></div>
+    <div className="enroll-head"><div className="eyebrow">{tr('课程注册','COURSE REGISTRATION')}</div><label className="registration-plan-label">{tr('注册计划','Registration plan')}<Select aria-label={tr('注册计划','Registration plan')} value={planName} disabled={!!busy} onChange={v=>{onSelectPlan(v);setSimulateFull(false)}}>{Object.keys(plans).map(name=><option key={name}>{name}</option>)}</Select></label></div>
     <div className="enroll-course"><div><span className="tag">{planName}</span><h2 id="enroll-title">{tr(`${planName} · ${list.length} 门课程`,`${planName} · ${list.length} courses`)}</h2><p>{tr(`${list.filter(c=>registeredIds.has(c.id)).length} 门已注册 · ${pending.length} 门待提交`,`${list.filter(c=>registeredIds.has(c.id)).length} registered · ${pending.length} ready to submit`)}</p></div>
      <Button variant="primary" className="enroll-" disabled={!!busy||!!reasons.length||!pending.length} aria-busy={!!busy} onClick={()=>submit(planName,list)}>{busy?<><LoaderCircle size={15} className="spin"/>{tr('注册中…','Registering…')}</>:complete?<><Check size={15}/>{tr('已注册','Registered')}</>:<>{tr(`注册 ${planName}`,`Register ${planName}`)}<ArrowRight size={15}/></>}</Button>
     </div>
@@ -108,14 +95,14 @@ export function RecoveryFlow({planName,plans,backups,results,registered,onCommit
      const c=registrationCheck(target,registered);const problems=blockers(target,true);
      const retainedOutside=registered.filter(r=>!target.some(t=>t.id===r.id));
      const additions=c.additions;
-     return <article className="recovery-option featured" key={name}><div className="option-body"><h3>{name}</h3><p>{tr('新增：','Add: ')}{additions.map(c=>c.id).join(', ')||tr('无','None')}</p><p>{tr('保留已注册：','Keep registered: ')}{registered.map(c=>c.id).join(', ')||tr('无','None')}</p>{!!retainedOutside.length&&<p>{tr('不在此计划中的已注册课程仍会保留：','Registered courses outside this plan are also kept: ')}{retainedOutside.map(c=>c.id).join(', ')}</p>}<p>{tr(`合计 ${c.credits} / 18 学分`,`${c.credits} / 18 total credits`)}</p>
+     return <article className="recovery-option featured" key={name}><div className="option-body"><h3>{name}</h3><p>{tr('新增：','Add: ')}{additions.map(c=>c.id).join(', ')||tr('无','None')}</p><p>{tr('保留已注册：','Keep registered: ')}{registered.map(c=>c.id).join(', ')||tr('无','None')}</p>{!!retainedOutside.length&&<p>{tr('不在此计划中的已注册课程仍会保留：','Registered courses outside this plan are also kept: ')}{retainedOutside.map(c=>c.id).join(', ')}</p>}<p>{tr(`合计 ${c.credits} / ${creditLimit} 学分`,`${c.credits} / ${creditLimit} total credits`)}</p>
       {problems.length?<div className="conflict-hint">{problems.map(p=><p key={p}>{p}</p>)}</div>:<p className="counts-inline"><Check size={14}/>{tr('时间、选课资格与余位检查通过','Time, eligibility and seat checks passed')}</p>}
       <div className="option-actions"><Button variant="primary" disabled={!!busy||!!problems.length||!additions.length} onClick={()=>submit(name,target,true)}>{tr(`立即注册 ${name}`,`Register ${name} now`)}<ArrowRight size={15}/></Button><Button variant="default" disabled={!!busy} onClick={()=>{onSelectPlan(name);onEdit()}}>{tr('编辑此计划','Edit this plan')}</Button></div>{!additions.length&&<p>{tr('此计划的课程均已注册，无需再次提交。','All courses in this plan are already registered.')}</p>}
      </div></article>
     })}
     <article className="recovery-option"><div className="option-body"><h3>{tr('自行选择其他课程','Choose another course')}</h3><p>{tr('前往探索课程，选择符合条件且有余位的课程。已成功注册的课程会保留。','Explore eligible courses with available seats. Your successful registrations will be kept.')}</p><Button variant="default" disabled={!!busy} onClick={onExplore}>{tr('注册其他课程','Register other courses')}<ArrowRight size={15}/></Button></div></article>
-    {firstFailed&&<article className="recovery-option"><div className="option-body"><h3>{firstFailed.id} · {tr('候补','Waitlist')}<Hint text={tr('候补不是注册成功，有空位时才可能递补。本演示不保证候补成功。','Waitlisting is not registration. A seat may become available; this demo does not guarantee one.')}/></h3><p>{tr('等待该课程释放名额，其他已注册课程不受影响。','Wait for a seat in this course; other registered courses are unaffected.')}</p><Button variant="default" disabled={!!busy||results[firstFailed.id]==='waitlist'} onClick={()=>onCommit({[firstFailed.id]:'waitlist'},[])}>{results[firstFailed.id]==='waitlist'?tr('已加入候补','Waitlisted'):tr('加入候补','Join waitlist')}</Button></div></article>}
-    {firstFailed&&<article className="recovery-option"><div className="option-body"><h3>{tr('推荐备选课程','Recommended backup course')}</h3>{replacement?<><p>{replacement.id} · {title(replacement)} · {slot(replacement,en)}</p><p>{tr('按备选优先级推荐；符合相同培养类别，与已注册课程无时间冲突。','Recommended by backup priority; matches the requirement category and does not conflict with registered courses.')}</p><Button variant="default" disabled={!!busy||!replacementCheck||replacementCheck.credits>18||!!results[replacement.id]} onClick={()=>submit(planName,[replacement],true,firstFailed.id)}>{tr(`替换并注册 ${replacement.id}`,`Replace and register ${replacement.id}`)}</Button>{replacementCheck&&replacementCheck.credits>18&&<p className="conflict-hint">{tr('加入后超过 18 学分上限。','This would exceed 18 credits.')}</p>}</>:<p>{tr('没有符合条件的备选课程。','No eligible backup course is available.')}</p>}<Button variant="text" disabled={!!busy} onClick={onExplore}>{tr('探索其他课程','Explore other courses')}<ArrowRight size={15}/></Button></div></article>}
+    {firstFailed&&<article className="recovery-option"><div className="option-body"><h3>{firstFailed.id} · {tr('候补','Waitlist')}<Hint text={tr('候补不是注册成功。释放名额时按候补顺序递补，递补前不占用学分。','Waitlisting is not registration. Seats are filled in queue order when released; waitlisted credits do not count toward your limit.')}/></h3><p>{tr('等待该课程释放名额，其他已注册课程不受影响。','Wait for a seat in this course; other registered courses are unaffected.')}</p><Button variant="default" disabled={!!busy||results[firstFailed.id]==='waitlist'} onClick={()=>onCommit({[firstFailed.id]:'waitlist'},[])}>{results[firstFailed.id]==='waitlist'?tr('已加入候补','Waitlisted'):tr('加入候补','Join waitlist')}</Button></div></article>}
+    {firstFailed&&<article className="recovery-option"><div className="option-body"><h3>{tr('推荐备选课程','Recommended backup course')}</h3>{replacement?<><p>{replacement.id} · {title(replacement)} · {slot(replacement,en)}</p><p>{tr('按备选优先级推荐；符合相同培养类别，与已注册课程无时间冲突。','Recommended by backup priority; matches the requirement category and does not conflict with registered courses.')}</p><Button variant="default" disabled={!!busy||!replacementCheck||replacementCheck.credits>creditLimit||!!results[replacement.id]} onClick={()=>submit(planName,[replacement],true,firstFailed.id)}>{tr(`替换并注册 ${replacement.id}`,`Replace and register ${replacement.id}`)}</Button>{replacementCheck&&replacementCheck.credits>creditLimit&&<p className="conflict-hint">{tr('加入后超过 18 学分上限。','This would exceed 18 credits.')}</p>}</>:<p>{tr('没有符合条件的备选课程。','No eligible backup course is available.')}</p>}<Button variant="text" disabled={!!busy} onClick={onExplore}>{tr('探索其他课程','Explore other courses')}<ArrowRight size={15}/></Button></div></article>}
     </div>
    </section>}
   </div>

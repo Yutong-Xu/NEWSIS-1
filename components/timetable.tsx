@@ -29,7 +29,7 @@ export function Timetable({ list, conflictIds = [], fullId, onDetail, compact = 
                     <strong>{c.id}{fullId === c.id ? (en ? ' · Full' : ' · 已满') : ''}</strong>
                     {(overlap) && <span className="block-conflict-label"><TriangleAlert size={14} aria-hidden="true" />{en ? 'Conflict' : '时间冲突'}</span>}
                     <span>{c.title}</span><small>{time(c.start)}–{time(c.end)}</small>
-                    {!compact && <small>{c.section ?? (c.id === 'DDA2081' && c.start === 16 ? 'Section B' : 'Section 01')}</small>}
+                    {!compact && <small>{c.section ?? ''}</small>}
                   </Button>
                 );
               })}
