@@ -8,7 +8,8 @@
 
 export const DEMO_USERS = [
   {
-    studentNo: "123090873",
+    username: "demo",
+    studentNo: "900000001",
     password: "demo123456",
     nameZh: "林语晴",
     nameEn: "Yuqing LIN",
@@ -35,7 +36,8 @@ export const DEMO_USERS = [
     ],
   },
   {
-    studentNo: "123090456",
+    username: "demo2",
+    studentNo: "900000002",
     password: "demo123456",
     nameZh: "陈可",
     nameEn: "Ke CHEN",
@@ -46,7 +48,8 @@ export const DEMO_USERS = [
     completed: [],
   },
   {
-    studentNo: "123078899",
+    username: "demo3",
+    studentNo: "900000003",
     password: "demo123456",
     nameZh: "王博",
     nameEn: "Bo WANG",

@@ -47,11 +47,11 @@ export function UpdateFeed({onViewPlan}:{onViewPlan:()=>void}) {
 
   return <section className="card updates-card">
     <div className="section-head"><h2>{language==='en'?'Important updates':'重要更新'} <span className="count-badge">{updateCount}</span></h2><span>{language==='en'?'Courses and degree requirements':'课程与修读计划动态'}</span></div>
-    <div className="update-list">{updates.map(update=><button type="button" className="update-row update-row-button" key={update.id} onClick={()=>setSelectedId(update.id)} aria-label={`${language==='en'?'View details for':'查看详情：'} ${copy(update.subject)} ${copy(update.title)}`}>
+    <div className="update-list">{updates.map(update=><Button variant="bare" type="button" key={update.id} onClick={()=>setSelectedId(update.id)} aria-label={`${language==='en'?'View details for':'查看详情：'} ${copy(update.subject)} ${copy(update.title)}`} className="update-row update-row-button">
       <span className="update-icon"><update.icon size={18}/></span>
       <span className="update-row-copy"><span className="update-row-title"><b>{copy(update.subject)}</b> {copy(update.title)}</span><span className="update-row-change"><s>{copy(update.previous)}</s><ArrowRight size={13}/><strong>{copy(update.current)}</strong></span></span>
       <small>{copy(update.ago)}</small><ChevronRight className="update-row-chevron" size={16} aria-hidden="true"/>
-    </button>)}</div>
+    </Button>)}</div>
     <Button variant="text" className="update-footer" onClick={onViewPlan}>{language==='en'?'View my course plans':'查看我的选课计划'} <ArrowRight size={15}/></Button>
 
     <Dialog open={!!selected} onOpenChange={open=>{if(!open)setSelectedId(null)}}><DialogContent className="sm:max-w-lg">

@@ -3,7 +3,7 @@
  * Pure functions over DB shapes — shared by API routes and tests.
  * Time model: minutes since midnight, days 0=Mon..4=Fri.
  */
-import type { Course, Section, Meeting, User, CompletedCourse } from "@prisma/client";
+import type { Course, Section, Meeting, User, CompletedCourse } from "@/prisma/generated/client";
 
 export type SectionWithMeetings = Section & { meetings: Meeting[] };
 export type CourseWithSections = Course & { sections: SectionWithMeetings[] };

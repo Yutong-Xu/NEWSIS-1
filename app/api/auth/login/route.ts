@@ -6,7 +6,7 @@ import { SESSION_COOKIE, SESSION_TTL_MS } from "@/lib/db/auth";
 import { sisLogin } from "@/lib/sis-sso";
 
 /**
- * POST /api/auth/login { studentNo, password }
+ * POST /api/auth/login { studentNo, password } — `studentNo` accepts a demo username or a real student number
  *
  * Branch logic (DESIGN.md §8.1): lookup decides the path, not the client.
  * - demo account (authSource="demo") → bcrypt verify locally, works offline
@@ -23,14 +23,18 @@ export async function POST(req: NextRequest) {
   const studentNo = (body.studentNo ?? "").trim();
   const password = body.password ?? "";
   if (!studentNo || !password) {
-    return err(400, "missing_fields", "请输入学号和密码 / Student ID and password are required");
+    return err(400, "missing_fields", "请输入用户名或学号和密码 / Username or student ID and password are required");
   }
 
-  const existing = await db.user.findUnique({ where: { studentNo } });
+  // demo accounts are looked up by username; real students by student number.
+  // the lookup decides the path — the client cannot choose or bypass it.
+  const existing = await db.user.findFirst({
+    where: { OR: [{ username: studentNo }, { studentNo }] },
+  });
 
   if (existing?.authSource === "demo" && existing.passwordHash) {
     if (!bcrypt.compareSync(password, existing.passwordHash)) {
-      return err(401, "invalid_credentials", "学号或密码不正确 / Incorrect student ID or password");
+      return err(401, "invalid_credentials", "用户名或密码不正确 / Incorrect username or password");
     }
     return issueSession(existing.studentNo);
   }
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg.includes("rejected")) {
-      return err(401, "invalid_credentials", "学号或密码不正确 / Incorrect student ID or password");
+      return err(401, "invalid_credentials", "用户名或密码不正确 / Incorrect username or password");
     }
     return err(503, "sso_unreachable", "无法连接学校认证服务，演示账号仍可登录 / University authentication is unreachable; demo accounts still work");
   }

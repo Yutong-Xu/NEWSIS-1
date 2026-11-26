@@ -53,7 +53,7 @@ export default function LoginPage() {
           </div>
         </div>
         <label>
-          学号 / Student ID
+          用户名或学号 / Username or Student ID
           <Input
             value={studentNo}
             onChange={(e) => setStudentNo(e.target.value)}
@@ -73,13 +73,13 @@ export default function LoginPage() {
           />
         </label>
         {error && <p className="login-error" role="alert">{error}</p>}
-        <Button variant="primary" className="login-submit" disabled={busy}>
+        <Button variant="primary" type="submit" className="login-submit" disabled={busy}>
           {busy && <Loader2 size={15} className="spin" />}
           登录 / Sign in
         </Button>
         <p className="login-hint">
-          演示账号：123090873 / 123090456 / 123078899，密码 demo123456。
-          其他学号将通过学校统一认证（ADFS）验证。
+          演示账号：demo / demo2 / demo3，密码 demo123456。
+          使用真实学号登录将通过学校统一认证（ADFS）验证。
         </p>
       </form>
     </div>

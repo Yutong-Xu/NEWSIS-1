@@ -2,12 +2,25 @@
  * Idempotent seed: everything is upserted, safe to re-run.
  * Data sources: lib/seed/catalog.ts (courses), lib/seed/users.ts (accounts/academics).
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "./generated/client.ts";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import bcrypt from "bcryptjs";
 import { COURSES, TERM } from "../lib/seed/catalog.ts";
 import { DEMO_USERS, DEGREE_REQUIREMENTS, NOTIFICATIONS } from "../lib/seed/users.ts";
 
-const db = new PrismaClient();
+import path from "node:path";
+import fs from "node:fs";
+
+// .env file is authoritative over inherited shell vars (avoids stale-export drift)
+try {
+  const envText = fs.readFileSync(path.resolve(process.cwd(), ".env"), "utf8");
+  const m = envText.match(/^DATABASE_URL=["']?([^"'\n]+)["']?/m);
+  if (m) process.env.DATABASE_URL = m[1];
+} catch {}
+const rawUrl = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
+const filePath = rawUrl.slice("file:".length);
+const absUrl = "file:" + (path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath));
+const db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: absUrl }) });
 
 async function main() {
   // term
@@ -94,13 +107,17 @@ async function main() {
   }
 
   // demo users + academic history
+  // remove legacy demo rows that used real-looking student numbers — those numbers
+  // must reach the SSO path now. cascades to their plans/enrollments/sessions.
+  await db.user.deleteMany({ where: { authSource: "demo", username: null } });
+
   for (const u of DEMO_USERS) {
     const passwordHash = bcrypt.hashSync(u.password, 10);
     await db.user.upsert({
       where: { studentNo: u.studentNo },
-      update: { nameZh: u.nameZh, nameEn: u.nameEn, major: u.major, year: u.year, creditsCompleted: u.creditsCompleted },
+      update: { username: u.username, nameZh: u.nameZh, nameEn: u.nameEn, major: u.major, year: u.year, creditsCompleted: u.creditsCompleted },
       create: {
-        studentNo: u.studentNo, passwordHash, authSource: "demo",
+        studentNo: u.studentNo, username: u.username, passwordHash, authSource: "demo",
         nameZh: u.nameZh, nameEn: u.nameEn, major: u.major, year: u.year,
         creditsCompleted: u.creditsCompleted,
       },

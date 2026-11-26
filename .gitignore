@@ -22,3 +22,6 @@ prisma/dev.db
 prisma/dev.db-journal
 tsconfig.tsbuildinfo
 .env
+
+# Prisma generated client
+prisma/generated/

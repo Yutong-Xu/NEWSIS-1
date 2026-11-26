@@ -1,14 +1,15 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "./generated"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model User {
   studentNo        String   @id
+  username         String?  @unique // login name for demo accounts; real students use their student number via SSO
   passwordHash     String? // demo accounts only; SSO users never store passwords
   authSource       String // "demo" | "sso"
   nameZh           String

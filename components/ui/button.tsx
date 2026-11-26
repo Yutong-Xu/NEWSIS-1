@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils'
  *   primary     → .btn.primary
  *   text        → .text-button
  *   icon        → .icon-btn
+ *   bare        → no design class — for custom interactive elements
+ *               (timetable blocks, banner close, icon-only utilities)
  * Any extra className (e.g. "btn-sm", "candidate-add") is merged on top.
  */
 function Button({
@@ -22,18 +24,19 @@ function Button({
   size,
   ...props
 }: ButtonPrimitive.Props & {
-  variant?: 'default' | 'primary' | 'text' | 'icon'
+  variant?: 'default' | 'primary' | 'text' | 'icon' | 'bare'
   size?: 'sm' | 'default'
 }) {
   const base =
     variant === 'primary' ? 'btn primary'
     : variant === 'text' ? 'text-button'
     : variant === 'icon' ? 'icon-btn'
+    : variant === 'bare' ? undefined
     : 'btn'
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(base, size === 'sm' && 'btn-sm', className)}
+      className={cn(base ?? '', size === 'sm' && 'btn-sm', className) || undefined}
       {...props}
     />
   )

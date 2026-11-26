@@ -10,7 +10,7 @@
  */
 import { db } from "@/lib/db/client";
 import { checkEligibility, sectionsConflict, availableSeats } from "@/lib/db/domain";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/prisma/generated/client";
 
 export type FailReason =
   | "prereq" | "year" | "major" | "excluded"

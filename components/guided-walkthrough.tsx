@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import { useLanguage } from './language';
+import { Button } from '@/components/ui/button';
 
 const storageKey='new-sis-walkthrough-v5';
 const steps=[
@@ -72,8 +73,8 @@ export function GuidedWalkthrough({run,onNavigate,onAddExampleCandidate,onAddExa
  },[active,step,current,onNavigate,onAddExampleCandidate,onAddExampleToPlan,onShowCourse,onSearchExample]);
  if(!active)return null;
  return <div className="tour-coachmark" role="status" aria-live="polite" style={position?{left:position.left,top:position.top,transform:position.side==='top'?'translateY(-100%)':undefined}:{left:12,top:12}}>
-  <div className="tour-coachmark-top"><span>{en?'GUIDED WALKTHROUGH':'选课分步引导'} · {step+1}/{steps.length}</span><button aria-label={en?'Close walkthrough':'关闭引导'} onClick={finish}><X size={18}/></button></div>
+  <div className="tour-coachmark-top"><span>{en?'GUIDED WALKTHROUGH':'选课分步引导'} · {step+1}/{steps.length}</span><Button variant="bare" aria-label={en?'Close walkthrough':'关闭引导'} onClick={finish}><X size={18}/></Button></div>
   <h2>{current.title[lang]}</h2><p>{current.body[lang]}</p>
-  <div className="tour-coachmark-bottom"><span>{position?(en?'Click the control or anywhere to continue':'点击高亮控件或屏幕任意位置继续'):(en?'Click anywhere to continue':'点击屏幕继续')}</span><button onClick={finish}>{en?'Skip guide':'跳过引导'}<ArrowRight size={14}/></button></div>
+  <div className="tour-coachmark-bottom"><span>{position?(en?'Click the control or anywhere to continue':'点击高亮控件或屏幕任意位置继续'):(en?'Click anywhere to continue':'点击屏幕继续')}</span><Button variant="bare" onClick={finish}>{en?'Skip guide':'跳过引导'}<ArrowRight size={14}/></Button></div>
  </div>;
 }

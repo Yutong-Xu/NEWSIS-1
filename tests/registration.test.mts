@@ -2,18 +2,8 @@
  * Domain logic tests: conflict detection, eligibility, seat accounting.
  * Runs with plain node — no DB needed (pure functions over mock shapes).
  */
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const ts = require("typescript");
-require.extensions[".ts"] = (module, filename) => {
-  module._compile(
-    ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-    }).outputText,
-    filename
-  );
-};
-const { sectionsConflict, conflictPairs, checkEligibility, availableSeats } = require("../lib/db/domain.ts");
+import assert from "node:assert/strict";
+import { sectionsConflict, conflictPairs, checkEligibility, availableSeats } from "../lib/db/domain.ts";
 
 const meeting = (dayOfWeek, startMin, endMin) => ({ dayOfWeek, startMin, endMin });
 const section = (id, courseId, meetings) => ({ id, courseId, meetings });

@@ -51,11 +51,13 @@ pnpm dev                    # http://localhost:3000
 
 ### Demo accounts
 
-| Student No | Password | Notes |
+| Username | Password | Notes |
 |---|---|---|
-| `123090873` | `demo123456` | 林语晴 · CSE Year 3 |
-| `123090456` | `demo123456` | 陈可 · SME Year 2 |
-| `123078899` | `demo123456` | 王博 · CSE Year 4 |
+| `demo` | `demo123456` | 林语晴 · CSE Year 3 |
+| `demo2` | `demo123456` | 陈可 · SME Year 2 |
+| `demo3` | `demo123456` | 王博 · CSE Year 4 |
+
+Demo accounts use usernames, never student numbers — so any real student number reaches the SSO path.
 
 Any **other** student number is verified against the real CUHK-Shenzhen ADFS SSO. This requires campus-network reachability of `sts.cuhk.edu.cn` and `sis.cuhk.edu.cn`; off campus it simply rejects the login.
 

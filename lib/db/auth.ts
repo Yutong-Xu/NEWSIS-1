@@ -4,7 +4,7 @@
  */
 import { cookies } from "next/headers";
 import { db } from "@/lib/db/client";
-import type { User } from "@prisma/client";
+import type { User } from "@/prisma/generated/client";
 
 export const SESSION_COOKIE = "sis_session";
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, sliding
