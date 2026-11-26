@@ -191,3 +191,49 @@ SearchHistory   —— 不入库，localStorage
 - **ADFS 凭证**：给定账号实测被 ADFS 拒绝（可能是密码过期或非正式账号）。若要做「真实验证」演示需先人工确认凭证可用；否则仅保留演示登录。
 - PeopleSoft 会话抓取复杂度高，已决定不做（见 1.2）。
 - SQLite 不适合多人同时在线压测，但演示/评分场景足够；schema 保持 Postgres 兼容兜底。
+
+---
+
+## 8. 设计补全（2026-11-26 实施前审查）
+
+对第 2–6 节审查出的遗漏，逐条补全：
+
+### 8.1 会话与认证细节
+- **Session**：`sis_session` cookie，值 = 64 字符随机 hex（crypto.randomBytes(32)），存 Session 表（id, userId, expiresAt=30天滑动, createdAt）。HttpOnly + SameSite=Lax + Secure(仅 prod)。登出删除服务端记录。不用 JWT——需要服务端可撤销（演示中重置数据场景）。
+- **密码**：演示账号 bcrypt(cost 10) 预哈希入库；SSO 用户**绝不落库真实密码**。
+- **SSO 影子用户竞态**：SQLite 串行写 + upsert 原子操作，无竞态。
+- **SSO 失败分类**：ADFS 凭证拒绝（401 语义）vs 网络不可达（503 语义 + 提示演示账号可用），前端分别提示。
+- **数据隔离**：所有 API 从 session 解析 userId，查询强制 userId 过滤；不存在"按 id 直接取"的未授权路径。
+
+### 8.2 并发与事务正确性
+- 余位扣减用**条件原子更新**：`UPDATE Section SET enrolledCount=enrolledCount+1 WHERE id=? AND enrolledCount+reservedQuota<capacity`，影响行数 0 = 满员，杜绝检查-写入竞态。Prisma 用 `updateMany` + 行数判断。
+- 注册提交是**单事务**：所有校验与写入在 `db.$transaction` 内；SQLite 写锁串行化，演示并发足够。
+- 候补：入队写 RegistrationItem(status=waitlist) + waitlistCount+1；**不做自动提升**（有人退课时队首不自动转正）——理由：演示范围外，P0-9 只要求显示候补状态与队列位置。队列位置 = 该 section 的 waitlist 项按时间排序的序号。
+
+### 8.3 业务规则补全
+- **学分上限**：18 学分（README 既有设定），存 Term.creditLimit；注册提交逐项累计校验，超限该门失败（原因码 credit_limit）。退选后释放。
+- **LEC/TUT 绑定规则**：注册以 LEC 为校验主体，TUT 跟随必选；TUT 满员/冲突 → 整课注册失败，原因码 tutorial_full/tutorial_conflict，提示可换 TUT 班次（前端给换班入口）。换 TUT 是独立操作不重新校验 LEC。
+- **计划上限**：每用户 6 个，名称唯一（用户范围内），1-30 字符；删除计划不级联删除已注册课程（Enrollment 是独立事实源）。
+- **快照原则**（沿用 registration.ts 注释）：已注册课程不随后续计划编辑变动；计划编辑只影响"待提交"部分。
+- **资格判定优先级**：prereq → year → major → excluded → full → conflict → credit_limit → time_window，按序返回第一个失败原因（与真实 SIS 逐门给原因一致）。
+
+### 8.4 API 契约统一
+- 错误统一：`{ "error": { "code": "prereq|full|conflict|...", "message": "人类可读", "details"?: any } }`，HTTP 状态语义化（400 业务校验 / 401 未登录 / 404 资源 / 409 冲突重复 / 503 外部依赖不可达）。
+- 成功响应直接返回资源对象；列表返回 `{ items: [], total }`。
+- 500 不泄露内部错误细节（日志记录，响应通用文案）。
+
+### 8.5 时间与演示兼容性
+- Term 注册窗口设为覆盖评审期的宽区间（2026-09-01 至 2027-01-15），保证 12 月 18 日演示时窗口开放；P0-10 的"时间状态"逻辑仍然完整实现（窗口外提交被拒），并预留 `SIS_TIME_OVERRIDE` env 供测试窗口外场景。
+- 学期固定 2026-Fall 一个，不做多学期切换（演示范围）。
+
+### 8.6 工程细节
+- **Migration**：使用 `prisma migrate` 生成版本化 SQL 入库（不用 db push），首次启动脚本自动 `migrate deploy` + 空库检测 seed，保持 README 单命令。
+- **seed 幂等**：全部 upsert。
+- **Node**：>= 22（README 既有要求），Prisma 7.x + SQLite macOS arm64 兼容已确认。
+- **测试**：tests/registration.cjs 迁移为测试服务端领域模块 `lib/db/registration-service.ts`（纯逻辑无 HTTP），保留原有断言语义并扩展班次/候补场景。
+- **i18n 迁移策略**：messages 目录按键组织；`Localized` 正则引擎删除前，先将 `tr(zh,en)` 内联调用批量转为 t() 键——分两阶段，先新页面（login）用新机制，再迁移主组件；若时间不足则保留 Localized 作为兼容层（标记为技术债）。【执行时按实际选择记录】
+- **前端数据获取**：原生 fetch + 服务端组件初始加载，不做 SWR 等新依赖（"不改样式"约束延伸到"不加运维面"）。
+- **guest 行为**：未登录访问任何页面重定向 `/login`；不做未登录草稿（真实 SIS 亦需登录；入库方案本身强于 P0-1 的 localStorage 建议，报告中作为改进点论述）。
+
+### 8.7 明确不做（范围控制）
+- 多学期切换、候补自动提升、真实成绩录入、并发压力优化、Vercel 部署适配（演示=本地）。
