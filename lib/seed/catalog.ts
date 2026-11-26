@@ -253,7 +253,6 @@ export const COURSES: CourseSeed[] = [
     credits: 3, category: "major_elective",
     instructorZh: "何俊", instructorEn: "Jun HO",
     rating: 4.5, reviews: 24, demand: "高", workload: "中等", tone: "blue",
-    prereqCourseIds: ["CSC4130"],
     targetZh: "CSE 大三–大四", targetEn: "CSE Year 3–4",
     descriptionZh: "系统讲授可用性生命周期：启发式评估、认知走查、眼动实验与 A/B 测试。课程作业围绕真实产品的可用性改进展开。",
     descriptionEn: "Covers the usability engineering lifecycle: heuristic evaluation, cognitive walkthrough, eye-tracking studies and A/B testing, with coursework on improving real products.",

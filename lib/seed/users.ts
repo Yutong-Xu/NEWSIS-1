@@ -29,7 +29,7 @@ export const DEMO_USERS = [
       { courseCode: "PED1001", credits: 1, grade: "B", term: "2024-25 Term 1" },
       { courseCode: "CSC1005", credits: 3, grade: "A-", term: "2024-25 Term 2" },
       { courseCode: "MAT1002", credits: 3, grade: "B", term: "2024-25 Term 2" },
-      { courseCode: "PHY1001", credits: 4, grade: "B+", term: "2025-26 Term 1" },
+      { courseCode: "PHY1001", credits: 3, grade: "B+", term: "2025-26 Term 1" },
       { courseCode: "GED1001", credits: 2, grade: "A", term: "2025-26 Term 1" },
       { courseCode: "CSC2050", credits: 3, grade: "A-", term: "2025-26 Term 2" },
     ],
