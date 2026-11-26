@@ -431,3 +431,18 @@
 .course-block.conflicting .block-conflict-label,.course-block.unavailable strong{color:var(--danger)}
 .course-block.unavailable{background:color-mix(in srgb,var(--danger) 8%,var(--card))}
 
+
+/* Login page */
+.login-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,var(--muted) 0%,var(--background) 60%);padding:20px}
+.login-card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:34px 30px;display:flex;flex-direction:column;gap:16px;box-shadow:0 12px 40px color-mix(in srgb,var(--primary) 10%,transparent)}
+.login-brand{display:flex;align-items:center;gap:13px;color:var(--primary);margin-bottom:6px}
+.login-brand h1{font-size:19px;letter-spacing:-.3px}
+.login-brand p{font-size:12px;color:var(--muted-foreground)}
+.login-card label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:550}
+.login-card input{border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;background:var(--background)}
+.login-card input:focus{outline:2px solid var(--primary);outline-offset:1px}
+.login-error{color:var(--danger);font-size:13px;background:color-mix(in srgb,var(--danger) 8%,var(--card));border:1px solid color-mix(in srgb,var(--danger) 25%,transparent);border-radius:8px;padding:9px 12px}
+.login-submit{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;font-size:14px}
+.login-hint{font-size:12px;color:var(--muted-foreground);line-height:1.6;border-top:1px solid var(--border);padding-top:13px}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
