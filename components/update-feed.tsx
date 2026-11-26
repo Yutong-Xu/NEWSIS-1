@@ -1,4 +1,5 @@
 "use client";
+import { Button } from '@/components/ui/button';
 
 import { useState } from 'react';
 import { ArrowRight, BookOpen, ChevronRight, FileCheck2, ShieldCheck, UserRound } from 'lucide-react';
@@ -51,7 +52,7 @@ export function UpdateFeed({onViewPlan}:{onViewPlan:()=>void}) {
       <span className="update-row-copy"><span className="update-row-title"><b>{copy(update.subject)}</b> {copy(update.title)}</span><span className="update-row-change"><s>{copy(update.previous)}</s><ArrowRight size={13}/><strong>{copy(update.current)}</strong></span></span>
       <small>{copy(update.ago)}</small><ChevronRight className="update-row-chevron" size={16} aria-hidden="true"/>
     </button>)}</div>
-    <button className="text-button update-footer" onClick={onViewPlan}>{language==='en'?'View my course plans':'查看我的选课计划'} <ArrowRight size={15}/></button>
+    <Button variant="text" className="update-footer" onClick={onViewPlan}>{language==='en'?'View my course plans':'查看我的选课计划'} <ArrowRight size={15}/></Button>
 
     <Dialog open={!!selected} onOpenChange={open=>{if(!open)setSelectedId(null)}}><DialogContent className="sm:max-w-lg">
       {selected&&<><DialogHeader><div className="eyebrow">{language==='en'?'FALL 2026 · INFORMATION UPDATE':'2026 秋季 · 信息更新'}</div><DialogTitle>{copy(selected.subject)} · {copy(selected.title)}</DialogTitle><DialogDescription>{copy(selected.ago)}</DialogDescription></DialogHeader>

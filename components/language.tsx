@@ -2,6 +2,7 @@
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ReactNode } from 'react';
 import { courses } from '@/lib/courses';
 import { english } from '@/lib/translations';
+import { Select } from './ui/select';
 type Language = 'zh' | 'en';
 const LanguageContext = createContext<{language:Language;setLanguage:(value:Language)=>void}>({language:'zh',setLanguage:()=>{}});
 const extra: Record<string,string> = {'学业进度':'Degree Progress','学业咨询':'Advising','设置':'Settings','查看课程详情':'View Course Details','加入计划':'Add to Plan','香港中文大学（深圳）校徽':'CUHK-Shenzhen crest'};
@@ -15,7 +16,7 @@ export function LanguageProvider({children}:{children:ReactNode}){
  return <LanguageContext.Provider value={{language,setLanguage}}>{children}</LanguageContext.Provider>;
 }
 export function useLanguage(){return useContext(LanguageContext).language}
-export function LanguageSelect(){const {language,setLanguage}=useContext(LanguageContext);return <select className="language-select" aria-label={language==='zh'?'界面语言':'Interface language'} value={language} onChange={e=>setLanguage(e.target.value as Language)}><option value="zh">中文</option><option value="en">English</option></select>}
+export function LanguageSelect(){const {language,setLanguage}=useContext(LanguageContext);return <Select className="language-select" aria-label={language==='zh'?'界面语言':'Interface language'} value={language} onChange={v=>setLanguage(v as Language)}><option value="zh">中文</option><option value="en">English</option></Select>}
 // Translate presentation only; keep selection values and application state language-independent.
 // Both languages run through the same Children.map pass so element keys stay identical and switching never remounts stateful components.
 function localize(node:ReactNode,tr:(s:string)=>string):ReactNode{

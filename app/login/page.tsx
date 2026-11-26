@@ -1,4 +1,6 @@
 "use client";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -52,7 +54,7 @@ export default function LoginPage() {
         </div>
         <label>
           学号 / Student ID
-          <input
+          <Input
             value={studentNo}
             onChange={(e) => setStudentNo(e.target.value)}
             placeholder="123090873"
@@ -62,7 +64,7 @@ export default function LoginPage() {
         </label>
         <label>
           密码 / Password
-          <input
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -71,10 +73,10 @@ export default function LoginPage() {
           />
         </label>
         {error && <p className="login-error" role="alert">{error}</p>}
-        <button className="btn primary login-submit" disabled={busy}>
+        <Button variant="primary" className="login-submit" disabled={busy}>
           {busy && <Loader2 size={15} className="spin" />}
           登录 / Sign in
-        </button>
+        </Button>
         <p className="login-hint">
           演示账号：123090873 / 123090456 / 123078899，密码 demo123456。
           其他学号将通过学校统一认证（ADFS）验证。

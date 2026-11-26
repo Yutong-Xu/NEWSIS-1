@@ -446,3 +446,16 @@
 .login-hint{font-size:12px;color:var(--muted-foreground);line-height:1.6;border-top:1px solid var(--border);padding-top:13px}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* unified Select component (base-ui) — visual parity with legacy native select */
+.sis-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--foreground);padding:6px 10px;font:inherit;font-size:12px;min-height:32px;cursor:pointer;text-align:left}
+.sis-select-trigger:disabled{opacity:.45;cursor:not-allowed}
+.sis-select-trigger:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
+.sis-select-popup{background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px color-mix(in srgb,var(--foreground) 12%,transparent);padding:4px;z-index:60;max-height:280px;overflow-y:auto;min-width:140px}
+.sis-select-item{display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:5px;font-size:12px;cursor:pointer;color:var(--foreground);outline:none}
+.sis-select-item[data-highlighted]{background:var(--muted)}
+.sis-select-item[data-selected]{font-weight:600}
+.sis-select-check{width:14px;display:inline-flex;color:var(--primary)}
+.filter-row .sis-select-trigger{flex:1;min-width:95px}
+.registration-plan-label .sis-select-trigger{min-height:40px}
+.plan-demo-fallback .sis-select-trigger{width:100%}
