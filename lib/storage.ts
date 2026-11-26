@@ -12,7 +12,9 @@
 
 export interface StoredState {
   plans: Record<string, string[]>; // plan name -> course ids
+  planPriorities?: Record<string, string[]>; // plan name -> conflict-resolution priority order
   candidates: string[];
+  dismissedCandidates?: string[];
   registeredIds: string[];
   results: Record<string, 'registered' | 'failed' | 'waitlist'>;
   waitlistPositions: Record<string, number>;
@@ -28,7 +30,9 @@ export function loadState(studentNo: string): StoredState | null {
     if (typeof parsed !== 'object' || parsed === null) return null;
     return {
       plans: parsed.plans ?? {},
+      planPriorities: parsed.planPriorities ?? undefined,
       candidates: parsed.candidates ?? [],
+      dismissedCandidates: parsed.dismissedCandidates ?? [],
       registeredIds: parsed.registeredIds ?? [],
       results: parsed.results ?? {},
       waitlistPositions: parsed.waitlistPositions ?? {},

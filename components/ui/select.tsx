@@ -33,7 +33,12 @@ function Select({
   'aria-label'?: string;
   disabled?: boolean;
 }) {
-  const nodes = Array.isArray(children) ? children : [children];
+  // JSX children flatten unevenly: mixing literal options with a .map() produces
+  // nested arrays ([<option/>, [<option/>, …]]), which must be flattened before use —
+  // otherwise the mapped options silently vanish from the popup.
+  const flat = (list: React.ReactNode[]): React.ReactNode[] =>
+    list.flatMap((n) => (Array.isArray(n) ? flat(n) : [n]));
+  const nodes = flat(Array.isArray(children) ? children : [children]);
   const items = nodes
     .filter((n): n is React.ReactElement<{ value?: string; children?: React.ReactNode }> =>
       n != null && typeof n === 'object' && 'props' in n)
