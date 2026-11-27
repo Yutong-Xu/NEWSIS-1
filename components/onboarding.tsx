@@ -50,6 +50,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                   <input type="radio" name="persona" checked={template === i} onChange={() => setTemplate(i)} />
                   <b>{en ? p.nameEn : p.nameZh}</b>
                   <small>{yearZh(p.year)} · {p.major}</small>
+                  <em className="onboarding-scenario">{en ? p.scenarioEn : p.scenarioZh}</em>
                 </label>
               ))}
             </div>

@@ -29,6 +29,9 @@ export interface Persona {
   nameEn: string;
   major: string;
   year: number;
+  /** what a visitor experiences with this persona (bilingual, shown on the start screen) */
+  scenarioZh: string;
+  scenarioEn: string;
   completed: CompletedCourse[];
   preset: PersonaPreset;
 }
@@ -39,6 +42,8 @@ const TEMPLATES: Persona[] = [
     // CSC3170+MAT2041 mix missing → CSC4100 blocked; CSC1003 done → excluded from CSC1001
     studentNo: "900000001",
     nameZh: "林语晴", nameEn: "Yuqing LIN", major: "CSE", year: 3,
+    scenarioZh: "先修已满足，可完整体验选课→注册→候补→退选全流程",
+    scenarioEn: "Prerequisites met — full journey: plan, register, waitlist, drop",
     completed: [
       { courseCode: "CSC1003", credits: 3, grade: "A", term: "2024-25 Term 1" },
       { courseCode: "CSC3002", credits: 3, grade: "A-", term: "2025-26 Term 1" },
@@ -65,6 +70,8 @@ const TEMPLATES: Persona[] = [
     // year-restricted courses are blocked; preset only uses open courses
     studentNo: "900000002",
     nameZh: "陈可", nameEn: "Ke CHEN", major: "CSE", year: 1,
+    scenarioZh: "大一新生：先修/年级限制会挡住大部分高阶课",
+    scenarioEn: "Freshman: prereq and year rules block most advanced courses",
     completed: [],
     preset: {
       plans: { "Plan A": ["ENG2001A", "GED2003"] },
@@ -76,6 +83,8 @@ const TEMPLATES: Persona[] = [
     // SME senior: major restriction scenarios invert (ACT open, CSE-targeted gated)
     studentNo: "900000003",
     nameZh: "王博", nameEn: "Bo WANG", major: "SME", year: 4,
+    scenarioZh: "商科学生：专业限制反转，CS 课大多不可选",
+    scenarioEn: "Business major: restrictions invert — CS courses mostly gated",
     completed: [
       { courseCode: "ACT1010", credits: 3, grade: "A", term: "2023-24 Term 1" },
       { courseCode: "ECO2011", credits: 3, grade: "A-", term: "2023-24 Term 2" },
