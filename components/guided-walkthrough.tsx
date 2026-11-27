@@ -22,8 +22,10 @@ export function GuidedWalkthrough({run,onNavigate,onAddExampleCandidate,onAddExa
  const en=useLanguage()==='en',lang=en?1:0;
  const [active,setActive]=useState(false),[step,setStep]=useState(0);
  const [position,setPosition]=useState<Position|null>(null);
+ const next=()=>{if(step===steps.length-1)finish();else setStep(value=>value+1)};
  const handledClick=useRef<Event|null>(null);
- useEffect(()=>{let seen=false;try{seen=localStorage.getItem(storageKey)==='done'}catch{}if(suppress){if(run>0&&!seen){setStep(0);setActive(true)}return}if(run>0||!seen){setStep(0);setActive(true)}},[run,suppress]);
+ // auto-trigger: fresh mode only, and only when never seen. Manual replay (run>0) works in any mode.
+ useEffect(()=>{let seen=false;try{seen=localStorage.getItem(storageKey)==='done'}catch{}const manual=run>0;const auto=!seen&&(suppress!==true);if(manual||auto){setStep(0);setActive(true)}},[run,suppress]);
  function finish(){setActive(false);setPosition(null);try{localStorage.setItem(storageKey,'done')}catch{}}
  const current=steps[step];
  useEffect(()=>{
@@ -47,34 +49,28 @@ export function GuidedWalkthrough({run,onNavigate,onAddExampleCandidate,onAddExa
   observer.observe(document.body,{childList:true,subtree:true});
   window.addEventListener('resize',schedulePlace);window.addEventListener('scroll',schedulePlace,true);
   schedulePlace();
-  function next(){if(step===steps.length-1)finish();else setStep(value=>value+1)}
   function advance(event:Event){
+   // P1-15: only the coachmark's own buttons advance the tour. Clicks elsewhere are
+   // blocked (not passed to the app) so highlighted content can't be mis-operated mid-tour.
    const source=event.target;
-   if(!(source instanceof Element)||source.closest('.tour-coachmark button'))return;
-   const onTarget=!!source.closest(selector);
-   if(event.type!=='click')return;
+   if(!(source instanceof Element))return;
+   if(source.closest('.tour-coachmark'))return;
    if(handledClick.current===event)return;
    handledClick.current=event;
-   if(step===5&&source.closest('.plan-tabs button'))return;
-   if(onTarget){if(step===1)onSearchExample();if(step===3)window.setTimeout(()=>onNavigate('explorer'),0);next();return}
    event.preventDefault();event.stopPropagation();
-   if(step===0)onNavigate('explorer');
-   if(step===1){onNavigate('explorer');onSearchExample()}
-   if(step===2)onShowCourse();
-   if(step===3){onAddExampleCandidate();onNavigate('explorer')}
-   if(step===4)onNavigate('plan');
-   if(step===5){onNavigate('plan');onAddExampleToPlan()}
-   if(step===6)onNavigate('review');
-   if(step===7)onNavigate('registration');
-   next();
   }
   document.addEventListener('click',advance,true);
-  return ()=>{cancelAnimationFrame(frame);observer.disconnect();target?.classList.remove('tour-highlight');window.removeEventListener('resize',schedulePlace);window.removeEventListener('scroll',schedulePlace,true);document.removeEventListener('click',advance,true)};
+  function keyAdvance(event:KeyboardEvent){
+   if(event.key==='Enter'||event.key===' '){if((event.target as Element)?.closest?.('.tour-coachmark'))return;event.preventDefault();next()}
+   if(event.key==='Escape')finish();
+  }
+  document.addEventListener('keydown',keyAdvance);
+  return ()=>{cancelAnimationFrame(frame);observer.disconnect();target?.classList.remove('tour-highlight');window.removeEventListener('resize',schedulePlace);window.removeEventListener('scroll',schedulePlace,true);document.removeEventListener('click',advance,true);document.removeEventListener('keydown',keyAdvance)};
  },[active,step,current,onNavigate,onAddExampleCandidate,onAddExampleToPlan,onShowCourse,onSearchExample]);
  if(!active)return null;
  return <div className="tour-coachmark" role="status" aria-live="polite" style={position?{left:position.left,top:position.top,transform:position.side==='top'?'translateY(-100%)':undefined}:{left:12,top:12}}>
   <div className="tour-coachmark-top"><span>{en?'GUIDED WALKTHROUGH':'选课分步引导'} · {step+1}/{steps.length}</span><Button variant="bare" aria-label={en?'Close walkthrough':'关闭引导'} onClick={finish}><X size={18}/></Button></div>
   <h2>{current.title[lang]}</h2><p>{current.body[lang]}</p>
-  <div className="tour-coachmark-bottom"><span>{position?(en?'Click the control or anywhere to continue':'点击高亮控件或屏幕任意位置继续'):(en?'Click anywhere to continue':'点击屏幕继续')}</span><Button variant="bare" onClick={finish}>{en?'Skip guide':'跳过引导'}<ArrowRight size={14}/></Button></div>
+  <div className="tour-coachmark-bottom"><Button variant="bare" onClick={finish}>{en?'Skip guide':'跳过引导'}<ArrowRight size={14}/></Button><Button variant="primary" onClick={next}>{step===steps.length-1?(en?'Finish':'完成'):(en?'Next':'下一步')}</Button></div>
  </div>;
 }
