@@ -17,7 +17,7 @@ type Props = {
  onDetail:(course:Course)=>void; onExplore:()=>void; onRegistered:()=>void; onEdit:()=>void;
 };
 
-export function RecoveryFlow({planName,plans,backups,results,registered,onCommit,onSelectPlan,onReplace,onDetail,onExplore,onRegistered,onEdit,planIdByName={},creditLimit=18,windowOpen=true}:Props&{planIdByName?:Record<string,string>;creditLimit?:number;windowOpen?:boolean}){
+export function RecoveryFlow({planName,plans,backups,results,registered,onCommit,onSelectPlan,onReplace,onDetail,onExplore,onRegistered,onEdit,planIdByName={},creditLimit=18,windowOpen=true,simulatedFullCourse}:Props&{planIdByName?:Record<string,string>;creditLimit?:number;windowOpen?:boolean;simulatedFullCourse?:string}){
  const en=useLanguage()==='en';
  const tr=(zh:string,english:string)=>en?english:zh;
  const [busy,setBusy]=useState('');
@@ -55,7 +55,8 @@ export function RecoveryFlow({planName,plans,backups,results,registered,onCommit
   const newCourses=target.filter(c=>!results[c.id]);
   if(!newCourses.length)return;
   lock.current=true;setBusy(targetName);
-  const simulated=simulateFull&&!fallback?'CSC4130':'';
+  // the 'full' scenario targets the user-selected course (P0-6), defaulting to the demo storyline course
+  const simulated=simulateFull&&!fallback?(simulatedFullCourse||'CSC4130'):'';
   timer.current=setTimeout(()=>{
    // simulation: optionally force CSC4130 full for the recovery demo
    const effectiveTarget=simulated?target.map(c=>c.id===simulated?{...c,seats:0,wait:20}:c):target;

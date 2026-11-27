@@ -147,32 +147,56 @@ export function adaptCourse(c: ApiCourse): Course {
 }
 
 
-/** Re-project a legacy Course onto a chosen lecture section: timing, seats and
- * section label all follow the chosen LEC; other fields are untouched. */
-export function withSection(base: Course, sectionCode: string | undefined): Course {
+/**
+ * Re-project a legacy Course onto chosen sections.
+ * `choice` is "LEC" alone or "LEC:TUT" — the LEC drives timing/seats, and an
+ * optional TUT's meetings are merged into the projected timetable so conflict
+ * checks see lecture+tutorial together. Nothing mutates the base course.
+ */
+export function withSection(base: Course, choice: string | undefined): Course {
   const sections = (base as Course & { _sections?: ApiSection[] })._sections;
   if (!sections) return base;
+  const [lecCode, tutCode] = (choice ?? "").split(":");
   const lecs = sections.filter((s) => s.kind === "LEC");
-  const lec = lecs.find((s) => s.sectionCode === sectionCode) ?? lecs[0];
+  const lec = lecs.find((s) => s.sectionCode === lecCode) ?? lecs[0];
   if (!lec) return base;
+  const tut = tutCode ? sections.find((s) => s.kind === "TUT" && s.sectionCode === tutCode) : undefined;
   const firstMeeting = lec.meetings[0];
   const daySet = new Set<number>();
   for (const m of lec.meetings) daySet.add(m.dayOfWeek);
+  // projected slot window must span lecture AND tutorial so conflict checks and
+  // the timetable see both meetings
+  let start = firstMeeting ? firstMeeting.startMin / 60 : base.start;
+  let end = firstMeeting ? firstMeeting.endMin / 60 : base.end;
+  if (tut) {
+    for (const m of tut.meetings) {
+      daySet.add(m.dayOfWeek);
+      start = Math.min(start, m.startMin / 60);
+      end = Math.max(end, m.endMin / 60);
+    }
+  }
+  const label = tut ? `Section ${lec.sectionCode} · ${tut.sectionCode}` : `Section ${lec.sectionCode}`;
   return {
     ...base,
     days: [...daySet].sort(),
-    start: firstMeeting ? firstMeeting.startMin / 60 : base.start,
-    end: firstMeeting ? firstMeeting.endMin / 60 : base.end,
+    start,
+    end,
     seats: Math.max(0, lec.availableSeats),
     capacity: lec.capacity,
     quota: lec.reservedQuota,
     wait: lec.waitlistCount,
-    section: `Section ${lec.sectionCode}`,
-  };
+    section: label,
+    _tut: tut,
+  } as Course;
 }
 
-/** Lecture sections available for a course (for pickers). */
-export function lectureSections(base: Course): ApiSection[] {
+/** Sections of one kind available for a course (for pickers). */
+export function sectionsOfKind(base: Course, kind: "LEC" | "TUT"): ApiSection[] {
   const sections = (base as Course & { _sections?: ApiSection[] })._sections;
-  return sections ? sections.filter((s) => s.kind === "LEC") : [];
+  return sections ? sections.filter((s) => s.kind === kind) : [];
+}
+
+/** Back-compat: lecture sections. */
+export function lectureSections(base: Course): ApiSection[] {
+  return sectionsOfKind(base, "LEC");
 }

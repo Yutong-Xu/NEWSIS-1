@@ -22,7 +22,24 @@ export const slot = (c:Course, en=false) => `${c.days.map(d=>(en?dayNamesEn:dayN
 export const findCourse = (id:string) => courses.find(c=>c.id===id)!;
 export const enrolled = (c:Course) => c.capacity - c.seats;
 export function plannedCourses(plan:Plan) { return plan.ids.map(id=>courses.find(c=>c.id===id)!).map(c=>c.id==='DDA2081'&&plan.alternate?{...c,days:[2],start:16,end:17.25,seats:12}:c).map(c=>({...c,...plan.overrides?.[c.id]})); }
-export const overlaps = (a:Course,b:Course) => a.id!==b.id&&a.days.some(d=>b.days.includes(d))&&a.start<b.end&&b.start<a.end;
+type Meetingish={dayOfWeek:number;startMin:number;endMin:number};
+export const meetingsOf=(c:Course):Meetingish[]=>{
+  const secs=(c as Course&{_sections?:Array<{meetings:Meetingish[]}>|undefined;_tut?:{meetings:Meetingish[]}|undefined})._sections;
+  if(!secs)return [];
+  const out:Meetingish[]=[];
+  for(const s of secs)for(const m of s.meetings)out.push(m);
+  const tut=(c as Course&{_tut?:{meetings:Meetingish[]}})._tut;
+  if(tut)for(const m of tut.meetings)out.push(m);
+  return out;
+};
+/** Per-meeting overlap when both courses expose meetings (LEC+TUT accurate);
+ * falls back to the day-window check for legacy projections. */
+export const overlaps=(a:Course,b:Course)=>{
+  if(a.id===b.id)return false;
+  const ma=meetingsOf(a),mb=meetingsOf(b);
+  if(ma.length&&mb.length)return ma.some(x=>mb.some(y=>x.dayOfWeek===y.dayOfWeek&&x.startMin<y.endMin&&y.startMin<x.endMin));
+  return a.days.some(d=>b.days.includes(d))&&a.start<b.end&&b.start<a.end;
+};
 export function conflicts(list:Course[]) {return list.flatMap((a,i)=>list.slice(i+1).filter(b=>overlaps(a,b)).map(b=>[a,b]));}
 export const conflictWith = (list:Course[], c:Course) => list.find(o=>overlaps(o,c));
 export function backupFor(plan:Plan, affected:string) {const remaining=plannedCourses(plan).filter(c=>c.id!==affected);return plan.priorities.map(id=>courses.find(c=>c.id===id)!).find(c=>!plan.ids.includes(c.id)&&c.eligible&&c.seats>0&&!conflicts([...remaining,c]).length);}
