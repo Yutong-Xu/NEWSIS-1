@@ -187,6 +187,9 @@ export function withSection(base: Course, choice: string | undefined): Course {
     wait: lec.waitlistCount,
     section: label,
     _tut: tut,
+    // the projected course carries ONLY the chosen sections' meetings — per-meeting
+    // conflict checks must not see the unchosen alternatives
+    _sections: tut ? [lec, tut] : [lec],
   } as Course;
 }
 

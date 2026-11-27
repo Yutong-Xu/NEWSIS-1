@@ -123,17 +123,3 @@ export function swapCourse(registered: Course[], fromId: string, target: Course,
   }
   return { ok: false, outcome: out };
 }
-
-// Legacy batch helper retained for the guided demo components.
-export function registrationBatch(target: Course[], registered: Course[], simulatedFull = '') {
- const existing = new Set(registered.map(c=>c.id));
- const results: RegistrationResults = {};
- const successful: Course[] = [];
- for (const course of target) {
-  if (existing.has(course.id)) { results[course.id]='registered'; continue; }
-  const failed = course.seats<=0 || course.id===simulatedFull;
-  results[course.id]=failed?'failed':'registered';
-  if (!failed) successful.push(course);
- }
- return {results,successful};
-}
