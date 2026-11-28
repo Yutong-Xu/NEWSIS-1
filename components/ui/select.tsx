@@ -65,7 +65,10 @@ function Select({
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Positioner sideOffset={4} alignItemWithTrigger={false}>
+        <SelectPrimitive.Positioner
+          sideOffset={4}
+          style={{ zIndex: 70 }}
+        >
           <SelectPrimitive.Popup className="sis-select-popup">
             {items.map((item) => (
               <SelectPrimitive.Item key={item.value || '__empty'} value={item.value} className="sis-select-item">
