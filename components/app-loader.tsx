@@ -73,7 +73,7 @@ export default function AppLoader() {
   if (!data) {
     return (
       <div className="login-shell">
-        <div className="login-card" style={{ alignItems: "center", textAlign: "center" }}>
+        <div className="login-card login-card-loading">
           <p>正在加载学生工作台… / Loading your workspace…</p>
         </div>
       </div>

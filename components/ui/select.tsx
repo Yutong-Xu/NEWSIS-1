@@ -8,10 +8,11 @@ import { cn } from '@/lib/utils';
 /**
  * Unified project select, built on @base-ui/react.
  *
- * Visual parity with the legacy native <select>: same height, border and
- * typography via .sis-select-trigger; the dropdown is a styled popup with
- * proper keyboard navigation and focus management (what the native element
- * could not offer inside dialogs).
+ * Sizing contract: the trigger is .sis-select-trigger; the popup matches the
+ * trigger's width via the --anchor-width variable base-ui sets on the
+ * Positioner (width: max(var(--anchor-width), 140px) in globals.css), and
+ * paints above dialogs via the positioner's z-index (70 > dialog z-50).
+ * Do NOT hand-roll widths or z-indexes at usage sites.
  *
  * Usage mirrors the native element:
  *   <Select value={v} onChange={(val) => ...} aria-label="…">
