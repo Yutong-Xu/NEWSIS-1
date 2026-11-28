@@ -1,0 +1,19 @@
+{
+  "entry": [
+    "app/page.tsx",
+    "app/layout.tsx"
+  ],
+  "project": [
+    "components/**/*.{ts,tsx}",
+    "lib/**/*.ts",
+    "app/**/*.{ts,tsx}"
+  ],
+  "ignoreDependencies": [
+    "tailwindcss",
+    "tw-animate-css",
+    "eslint",
+    "eslint-config-next",
+    "postcss-load-config"
+  ],
+  "ignoreExportsUsedInFile": true
+}
