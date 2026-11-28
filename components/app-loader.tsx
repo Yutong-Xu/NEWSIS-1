@@ -80,5 +80,5 @@ export default function AppLoader() {
     );
   }
 
-  return <NewSIS key={`${data.persona.studentNo}:${data.mode}`} data={data} reloadAll={() => {}} />;
+  return <NewSIS key={`${data.persona.studentNo}:${data.mode}`} data={data} />;
 }
