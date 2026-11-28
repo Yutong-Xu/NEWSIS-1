@@ -7,9 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:migrate": "prisma migrate deploy",
-    "db:seed": "node --experimental-strip-types prisma/seed.ts",
-    "db:setup": "prisma migrate deploy && node --experimental-strip-types prisma/seed.ts"
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint",
+    "test": "node --experimental-strip-types tests/registration.test.mts",
+    "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
