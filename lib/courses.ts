@@ -24,10 +24,15 @@ export const enrolled = (c:Course) => c.capacity - c.seats;
 export function plannedCourses(plan:Plan) { return plan.ids.map(id=>courses.find(c=>c.id===id)!).map(c=>c.id==='DDA2081'&&plan.alternate?{...c,days:[2],start:16,end:17.25,seats:12}:c).map(c=>({...c,...plan.overrides?.[c.id]})); }
 type Meetingish={dayOfWeek:number;startMin:number;endMin:number};
 export const meetingsOf=(c:Course):Meetingish[]=>{
-  const secs=(c as Course&{_sections?:Array<{meetings:Meetingish[]}>|undefined;_tut?:{meetings:Meetingish[]}|undefined})._sections;
+  const secs=(c as Course&{_sections?:Array<{kind:string;sectionCode:string;meetings:Meetingish[]}>|undefined;_tut?:{meetings:Meetingish[]}|undefined})._sections;
   if(!secs)return [];
   const out:Meetingish[]=[];
-  for(const s of secs)for(const m of s.meetings)out.push(m);
+  // a projected course carries exactly the chosen LEC(+TUT); a raw catalog course
+  // carries every section — for conflict purposes assume the PRIMARY lecture only,
+  // since tutorial choice happens after adding (and may change conflicts).
+  const lecs=secs.filter(s=>s.kind==='LEC');
+  const primary=lecs[0];
+  if(primary)for(const m of primary.meetings)out.push(m);
   const tut=(c as Course&{_tut?:{meetings:Meetingish[]}})._tut;
   if(tut)for(const m of tut.meetings)out.push(m);
   return out;
